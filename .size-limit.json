@@ -1,0 +1,23 @@
+[
+	{
+		"name": "@anvilkit/collab-ui",
+		"path": "dist/index.js",
+		"limit": "50 KB",
+		"gzip": true,
+		"ignore": [
+			"react",
+			"react-dom",
+			"@puckeditor/core",
+			"@anvilkit/core",
+			"@anvilkit/plugin-collab-yjs",
+			"@anvilkit/plugin-version-history",
+			"@anvilkit/ui",
+			"@anvilkit/utils",
+			"@base-ui/react",
+			"clsx",
+			"lucide-react",
+			"sonner",
+			"tailwind-merge"
+		]
+	}
+]
