@@ -3,7 +3,7 @@
 import type { PresenceState } from "@anvilkit/plugin-version-history";
 import type { ReactNode } from "react";
 
-import { useCollabPeers } from "../context.js";
+import { useCollabContext } from "../context.js";
 import { cn } from "../lib/cn.js";
 
 export interface PeerAvatarStackProps {
@@ -12,17 +12,20 @@ export interface PeerAvatarStackProps {
 }
 
 export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
-	const peers = useCollabPeers();
+	const { self, peers } = useCollabContext();
+	const collaborators: readonly PresenceState[] = [{ peer: self }, ...peers];
 	const max = props.maxVisible ?? 5;
-	const visible = peers.slice(0, max);
-	const overflow = Math.max(peers.length - visible.length, 0);
+	const visible = collaborators.slice(0, max);
+	const overflow = Math.max(collaborators.length - visible.length, 0);
 
 	return (
 		<div
 			className={cn("flex items-center -space-x-2", props.className)}
 			data-slot="peer-avatar-stack"
 			role="list"
-			aria-label={`${peers.length} ${peers.length === 1 ? "peer" : "peers"} connected`}
+			aria-label={`${collaborators.length} ${
+				collaborators.length === 1 ? "collaborator" : "collaborators"
+			} connected`}
 		>
 			{visible.map((peer) => (
 				<PeerAvatar key={peer.peer.id} peer={peer} />

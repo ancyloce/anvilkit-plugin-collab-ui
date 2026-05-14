@@ -5,19 +5,16 @@ import type {
 	ConnectionStatus,
 	YjsSnapshotAdapter,
 } from "@anvilkit/plugin-collab-yjs";
-import type {
-	PeerInfo,
-	PresenceState,
-} from "@anvilkit/plugin-version-history";
+import type { PeerInfo, PresenceState } from "@anvilkit/plugin-version-history";
 import {
 	createContext,
+	type ReactNode,
 	useCallback,
 	useContext,
 	useEffect,
 	useMemo,
 	useRef,
 	useState,
-	type ReactNode,
 } from "react";
 
 export interface CollabSelf {
@@ -49,8 +46,8 @@ export interface CollabUIProviderProps {
 }
 
 export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
-	const { adapter, children } = props;
-	const [self, setSelfState] = useState<PeerInfo>(props.self);
+	const { adapter, children, self: selfProp } = props;
+	const [self, setSelfState] = useState<PeerInfo>(selfProp);
 	const [status, setStatus] = useState<ConnectionStatus>(() =>
 		adapter.getStatus(),
 	);
@@ -58,6 +55,14 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	const [conflicts, setConflicts] = useState<readonly ConflictEvent[]>([]);
 	const selfRef = useRef(self);
 	selfRef.current = self;
+
+	useEffect(() => {
+		setSelfState({
+			id: selfProp.id,
+			displayName: selfProp.displayName,
+			color: selfProp.color,
+		});
+	}, [selfProp.id, selfProp.displayName, selfProp.color]);
 
 	useEffect(() => {
 		const unsub = adapter.onStatusChange(setStatus);
@@ -74,16 +79,18 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	useEffect(() => {
 		const presence = adapter.presence;
 		if (!presence) return;
-		// Mirror initial self into the awareness channel so other peers
-		// see us as soon as the provider mounts.
-		presence.update({ peer: selfRef.current });
 		const unsub = presence.onPeerChange((next) => {
-			setPeers(
-				next.filter((peer) => peer.peer.id !== selfRef.current.id),
-			);
+			setPeers(next.filter((peer) => peer.peer.id !== selfRef.current.id));
 		});
 		return () => unsub();
 	}, [adapter]);
+
+	useEffect(() => {
+		// Mirror the current local identity into the awareness channel so
+		// other peers see joins and settings changes even before a cursor
+		// move or selection update.
+		adapter.presence?.update({ peer: self });
+	}, [adapter, self]);
 
 	const dismissConflict = useCallback((at: string) => {
 		setConflicts((prev) => prev.filter((event) => event.at !== at));
@@ -93,20 +100,16 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		setConflicts([]);
 	}, []);
 
-	const updateSelf = useCallback(
-		(patch: Partial<CollabSelf>) => {
-			setSelfState((prev) => {
-				const next: PeerInfo = {
-					id: prev.id,
-					displayName: patch.displayName ?? prev.displayName,
-					color: patch.color ?? prev.color,
-				};
-				adapter.presence?.update({ peer: next });
-				return next;
-			});
-		},
-		[adapter],
-	);
+	const updateSelf = useCallback((patch: Partial<CollabSelf>) => {
+		setSelfState((prev) => {
+			const next: PeerInfo = {
+				id: prev.id,
+				displayName: patch.displayName ?? prev.displayName,
+				color: patch.color ?? prev.color,
+			};
+			return next;
+		});
+	}, []);
 
 	const value = useMemo<CollabUIContextValue>(
 		() => ({
