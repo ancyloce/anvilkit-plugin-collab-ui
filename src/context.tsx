@@ -80,7 +80,7 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		const presence = adapter.presence;
 		if (!presence) return;
 		const unsub = presence.onPeerChange((next) => {
-			setPeers(next.filter((peer) => peer.peer.id !== selfRef.current.id));
+			setPeers(dedupeRemotePeers(next, selfRef.current.id));
 		});
 		return () => unsub();
 	}, [adapter]);
@@ -169,4 +169,25 @@ export function useCollabConflicts(): readonly ConflictEvent[] {
 
 export function useCollabAdapter(): YjsSnapshotAdapter {
 	return useCollabContext().adapter;
+}
+
+function dedupeRemotePeers(
+	peers: readonly PresenceState[],
+	selfId: string,
+): readonly PresenceState[] {
+	const byId = new Map<string, PresenceState>();
+	for (const frame of peers) {
+		if (frame.peer.id === selfId) continue;
+		const prev = byId.get(frame.peer.id);
+		if (!prev) {
+			byId.set(frame.peer.id, frame);
+			continue;
+		}
+		byId.set(frame.peer.id, {
+			peer: { ...prev.peer, ...frame.peer },
+			cursor: frame.cursor ?? prev.cursor,
+			selection: frame.selection ?? prev.selection,
+		});
+	}
+	return Array.from(byId.values());
 }

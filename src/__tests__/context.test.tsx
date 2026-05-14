@@ -58,6 +58,29 @@ describe("CollabUIProvider", () => {
 		expect(result.current.map((peer) => peer.peer.id)).toEqual(["bob"]);
 	});
 
+	it("dedupes repeated remote peer frames by id", () => {
+		const { adapter, controls } = createFakeAdapter();
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+				{children}
+			</CollabUIProvider>
+		);
+		const { result } = renderHook(() => useCollabPeers(), { wrapper });
+
+		act(() =>
+			controls.emitPeers([
+				{ peer: { id: "bob", displayName: "Bob" } },
+				{
+					peer: { id: "bob", displayName: "Bob" },
+					cursor: { x: 12, y: 34 },
+				},
+			]),
+		);
+		expect(result.current).toHaveLength(1);
+		expect(result.current[0]?.peer.id).toBe("bob");
+		expect(result.current[0]?.cursor).toEqual({ x: 12, y: 34 });
+	});
+
 	it("appends conflict events", () => {
 		const { adapter, controls } = createFakeAdapter();
 		const wrapper = ({ children }: { children: React.ReactNode }) => (
