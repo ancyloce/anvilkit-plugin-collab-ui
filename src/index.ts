@@ -11,6 +11,10 @@ export {
 	type CollabUIProviderProps,
 } from "./context.js";
 export {
+	createCollabPlugin,
+	type CreateCollabPluginOptions,
+} from "./plugin.js";
+export {
 	CollabRoomBar,
 	type CollabRoomBarProps,
 } from "./components/collab-room-bar.js";
