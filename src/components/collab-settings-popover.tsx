@@ -3,7 +3,7 @@
 import { Popover } from "@base-ui/react/popover";
 import { Switch } from "@base-ui/react/switch";
 import { Settings } from "lucide-react";
-import { useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { type ChangeEvent, type ReactNode, useId, useState } from "react";
 
 import { useCollabContext } from "../context.js";
 import { cn } from "../lib/cn.js";
@@ -66,14 +66,10 @@ export function CollabSettingsPopover(
 						data-slot="collab-settings-popover"
 						className="z-50 w-72 rounded-md border bg-popover p-4 text-sm text-popover-foreground shadow-md outline-hidden"
 					>
-						<Popover.Title className="font-medium">
-							Collaboration
-						</Popover.Title>
+						<Popover.Title className="font-medium">Collaboration</Popover.Title>
 						<form className="mt-3 grid gap-3">
 							<label className="grid gap-1" htmlFor={nameId}>
-								<span className="text-xs text-foreground/70">
-									Display name
-								</span>
+								<span className="text-xs text-foreground/70">Display name</span>
 								<input
 									id={nameId}
 									type="text"
@@ -83,9 +79,7 @@ export function CollabSettingsPopover(
 								/>
 							</label>
 							<label className="grid gap-1" htmlFor={colorId}>
-								<span className="text-xs text-foreground/70">
-									Peer color
-								</span>
+								<span className="text-xs text-foreground/70">Peer color</span>
 								<input
 									id={colorId}
 									type="color"
@@ -105,16 +99,24 @@ export function CollabSettingsPopover(
 									id={cursorsId}
 									checked={showRemoteCursors}
 									onCheckedChange={handleToggleCursors}
-									className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-muted transition-colors data-[checked]:bg-emerald-500"
+									className={cn(
+										"relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors",
+										showRemoteCursors ? "bg-emerald-500" : "bg-muted",
+									)}
 								>
-									<Switch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-background shadow transition-transform data-[checked]:translate-x-[18px]" />
+									<Switch.Thumb
+										className={cn(
+											"block size-4 rounded-full bg-background shadow transition-transform",
+											showRemoteCursors
+												? "translate-x-[18px]"
+												: "translate-x-0.5",
+										)}
+									/>
 								</Switch.Root>
 							</label>
 							{props.roomId !== undefined ? (
 								<div className="grid gap-1">
-									<span className="text-xs text-foreground/70">
-										Room
-									</span>
+									<span className="text-xs text-foreground/70">Room</span>
 									<div className="flex items-center gap-2">
 										<input
 											type="text"

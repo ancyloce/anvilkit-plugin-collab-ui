@@ -87,7 +87,7 @@
 		"@anvilkit/biome-config": "workspace:*",
 		"@anvilkit/typescript-config": "workspace:*",
 		"@anvilkit/vitest-config": "workspace:*",
-		"@puckeditor/core": "^0.21.1",
+		"@puckeditor/core": "^0.21.2",
 		"@rsbuild/plugin-react": "^1.4.6",
 		"@rslib/core": "^0.20.1",
 		"@testing-library/jest-dom": "^6.9.1",
