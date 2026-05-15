@@ -1,7 +1,12 @@
 "use client";
 
 import type { PresenceState } from "@anvilkit/plugin-version-history";
-import type { ReactNode } from "react";
+import {
+	AvatarGroup,
+	AvatarGroupTooltip,
+} from "@anvilkit/ui/components/animate-ui/components/animate/avatar-group";
+import { Avatar, AvatarFallback } from "@anvilkit/ui/avatar";
+import type { ReactElement, ReactNode } from "react";
 
 import { useCollabContext } from "../context.js";
 import { cn } from "../lib/cn.js";
@@ -18,26 +23,29 @@ export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 	const visible = collaborators.slice(0, max);
 	const overflow = Math.max(collaborators.length - visible.length, 0);
 
+	const items: ReactElement[] = visible.map((peer) => (
+		<PeerAvatar key={peer.peer.id} peer={peer} />
+	));
+	if (overflow > 0) {
+		items.push(<OverflowAvatar key="__overflow" count={overflow} />);
+	}
+
 	return (
 		<div
-			className={cn("flex items-center -space-x-2", props.className)}
+			className={cn("flex items-center", props.className)}
 			data-slot="peer-avatar-stack"
 			role="list"
 			aria-label={`${collaborators.length} ${
 				collaborators.length === 1 ? "collaborator" : "collaborators"
 			} connected`}
 		>
-			{visible.map((peer) => (
-				<PeerAvatar key={peer.peer.id} peer={peer} />
-			))}
-			{overflow > 0 ? (
-				<span
-					className="relative inline-flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground ring-2 ring-background"
-					aria-label={`${overflow} more`}
-				>
-					+{overflow}
-				</span>
-			) : null}
+			<AvatarGroup
+				className="flex -space-x-2 h-7"
+				translate="-25%"
+				invertOverlap
+			>
+				{items}
+			</AvatarGroup>
 		</div>
 	);
 }
@@ -49,22 +57,46 @@ function PeerAvatar({ peer }: { peer: PresenceState }): ReactNode {
 		.slice(0, 2)
 		.join("");
 	const background = peer.peer.color ?? "var(--muted)";
+	const label = peer.peer.displayName ?? peer.peer.id;
 	return (
-		<span
+		<Avatar
 			role="listitem"
-			title={peer.peer.displayName ?? peer.peer.id}
 			data-peer-id={peer.peer.id}
-			className="relative inline-flex size-7 items-center justify-center rounded-full text-xs font-medium ring-2 ring-background"
-			style={{ background, color: contrastForeground(background) }}
+			size="sm"
+			className="ring-2 ring-background"
+			style={{ background }}
 		>
-			{initials || "?"}
-		</span>
+			<AvatarFallback className="bg-transparent text-[10px] font-medium text-white">
+				{initials || "?"}
+			</AvatarFallback>
+			<AvatarGroupTooltip>
+				<div className="flex items-center gap-2">
+					<span
+						aria-hidden="true"
+						className="size-2 rounded-full"
+						style={{ backgroundColor: background }}
+					/>
+					<span>{label}</span>
+					<span
+						aria-hidden="true"
+						className="size-1.5 rounded-full bg-emerald-500"
+					/>
+				</div>
+			</AvatarGroupTooltip>
+		</Avatar>
 	);
 }
 
-function contrastForeground(_background: string): string {
-	// Peer colors are user-supplied; default to white text for the
-	// short HSL-based set the demo uses. Hosts can override by
-	// rendering their own avatar component.
-	return "white";
+function OverflowAvatar({ count }: { count: number }): ReactNode {
+	return (
+		<Avatar
+			size="sm"
+			className="ring-2 ring-background"
+			aria-label={`${count} more`}
+		>
+			<AvatarFallback className="text-[10px] font-medium text-muted-foreground">
+				+{count}
+			</AvatarFallback>
+		</Avatar>
+	);
 }

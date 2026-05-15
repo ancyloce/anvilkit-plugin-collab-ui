@@ -40,14 +40,14 @@ describe("<CollabSettingsPopover />", () => {
 		});
 
 		expect(toggle).toHaveAttribute("aria-checked", "false");
-		expect(toggle).toHaveClass("bg-muted");
+		expect(toggle).toHaveAttribute("data-unchecked", "");
 
 		fireEvent.click(toggle);
 
 		expect(onShowRemoteCursorsChange).toHaveBeenCalledWith(true);
 		await waitFor(() => {
 			expect(toggle).toHaveAttribute("aria-checked", "true");
-			expect(toggle).toHaveClass("bg-emerald-500");
+			expect(toggle).toHaveAttribute("data-checked", "");
 		});
 	});
 });

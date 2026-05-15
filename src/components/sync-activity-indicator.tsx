@@ -1,6 +1,11 @@
 "use client";
 
-import { Popover } from "@base-ui/react/popover";
+import {
+	Popover,
+	PopoverTrigger,
+	PopoverPanel,
+	PopoverTitle,
+} from "@anvilkit/ui/components/animate-ui/components/base/popover";
 import { useId, type ReactNode } from "react";
 
 import { useCollabStatus } from "../context.js";
@@ -43,8 +48,8 @@ export function SyncActivityIndicator(
 	const status = useCollabStatus();
 	const popoverId = useId();
 	return (
-		<Popover.Root>
-			<Popover.Trigger
+		<Popover>
+			<PopoverTrigger
 				aria-describedby={popoverId}
 				className={cn(
 					"inline-flex items-center gap-2 rounded-md border border-transparent px-2 py-1 text-sm transition-colors hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -67,64 +72,62 @@ export function SyncActivityIndicator(
 				>
 					{statusLabel(status)}
 				</span>
-			</Popover.Trigger>
-			<Popover.Portal>
-				<Popover.Positioner sideOffset={4}>
-					<Popover.Popup
-						id={popoverId}
-						className="z-50 min-w-56 rounded-md border bg-popover p-3 text-sm text-popover-foreground shadow-md outline-hidden"
-					>
-						<Popover.Title className="font-medium">
-							{statusLabel(status)}
-						</Popover.Title>
-						<dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-foreground/70">
-							{props.latencyMs !== undefined ? (
-								<>
-									<dt>Latency p95</dt>
-									<dd>{props.latencyMs} ms</dd>
-								</>
-							) : null}
-							{status.kind === "offline" ? (
-								<>
-									<dt>Queued edits</dt>
-									<dd>{status.queuedEdits}</dd>
-								</>
-							) : null}
-							{status.kind === "synced" ? (
-								<>
-									<dt>Synced since</dt>
-									<dd>{formatTime(status.since)}</dd>
-								</>
-							) : null}
-							{status.kind === "reconnecting" ? (
-								<>
-									<dt>Backoff</dt>
-									<dd>{status.backoffMs} ms</dd>
-								</>
-							) : null}
-							{status.kind === "error" ? (
-								<>
-									<dt>Reason</dt>
-									<dd>{status.message}</dd>
-								</>
-							) : null}
-							{props.lastSyncAt !== undefined ? (
-								<>
-									<dt>Last sync</dt>
-									<dd>{formatTime(props.lastSyncAt)}</dd>
-								</>
-							) : null}
-							{props.lastPeerName !== undefined ? (
-								<>
-									<dt>Last peer</dt>
-									<dd>{props.lastPeerName}</dd>
-								</>
-							) : null}
-						</dl>
-					</Popover.Popup>
-				</Popover.Positioner>
-			</Popover.Portal>
-		</Popover.Root>
+			</PopoverTrigger>
+			<PopoverPanel
+				id={popoverId}
+				align="center"
+				sideOffset={4}
+				className="min-w-56 text-sm text-popover-foreground"
+			>
+				<PopoverTitle className="font-medium">
+					{statusLabel(status)}
+				</PopoverTitle>
+				<dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-foreground/70">
+					{props.latencyMs !== undefined ? (
+						<>
+							<dt>Latency p95</dt>
+							<dd>{props.latencyMs} ms</dd>
+						</>
+					) : null}
+					{status.kind === "offline" ? (
+						<>
+							<dt>Queued edits</dt>
+							<dd>{status.queuedEdits}</dd>
+						</>
+					) : null}
+					{status.kind === "synced" ? (
+						<>
+							<dt>Synced since</dt>
+							<dd>{formatTime(status.since)}</dd>
+						</>
+					) : null}
+					{status.kind === "reconnecting" ? (
+						<>
+							<dt>Backoff</dt>
+							<dd>{status.backoffMs} ms</dd>
+						</>
+					) : null}
+					{status.kind === "error" ? (
+						<>
+							<dt>Reason</dt>
+							<dd>{status.message}</dd>
+						</>
+					) : null}
+					{props.lastSyncAt !== undefined ? (
+						<>
+							<dt>Last sync</dt>
+							<dd>{formatTime(props.lastSyncAt)}</dd>
+						</>
+					) : null}
+					{props.lastPeerName !== undefined ? (
+						<>
+							<dt>Last peer</dt>
+							<dd>{props.lastPeerName}</dd>
+						</>
+					) : null}
+				</dl>
+			</PopoverPanel>
+		</Popover>
 	);
 }
 
