@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@anvilkit/ui/button";
 import {
 	Dialog,
 	DialogClose,
@@ -52,7 +53,7 @@ export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
 				{error !== null ? (
 					<p
 						role="alert"
-						className="text-sm text-rose-600"
+						className="text-sm text-destructive"
 						data-testid="force-resync-error"
 					>
 						{error}
@@ -60,22 +61,21 @@ export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
 				) : null}
 				<DialogFooter>
 					<DialogClose
-						className="inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium hover:bg-muted"
-						disabled={busy}
+						render={<Button type="button" variant="outline" disabled={busy} />}
 					>
 						Cancel
 					</DialogClose>
-					<button
+					<Button
 						type="button"
-						className="inline-flex h-9 items-center justify-center rounded-md bg-rose-600 px-4 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+						variant="destructive"
 						onClick={() => {
 							void handleConfirm();
 						}}
 						disabled={busy}
 						data-testid="force-resync-confirm"
 					>
-						{busy ? "Resyncing…" : "Force Resync"}
-					</button>
+						{busy ? "Resyncing..." : "Force Resync"}
+					</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
