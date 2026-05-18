@@ -49,6 +49,10 @@ vi.mock("@anvilkit/plugin-collab-yjs", () => {
 			}
 			return adapterRef.current;
 		}),
+		// P2 — the factory now wraps the adapter for save coalescing.
+		// Identity stub (no debounce) so existing assertions about the
+		// inner data plugin / adapter wiring stay unchanged.
+		createDebouncedAdapter: vi.fn((adapter: unknown) => adapter),
 		// `createCollabDataPlugin` is the data plugin our factory wraps.
 		// We provide a minimal stub that returns hooks so the registration
 		// inherits the expected shape.

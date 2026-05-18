@@ -40,6 +40,7 @@ import {
 	type CollabPolicy,
 	createCollabDataPlugin,
 	type CreateCollabPluginOptions as CreateDataPluginOptions,
+	createDebouncedAdapter,
 	type CreateYjsAdapterOptions,
 	createYjsAdapter,
 	type PersistenceOptions,
@@ -151,6 +152,18 @@ export interface CreateCollabPluginOptions {
 	readonly persistence?: PersistenceOptions;
 
 	// ── Data plugin behavior (forwarded to createCollabDataPlugin) ───
+	/**
+	 * P2 — coalesce keystroke-rate local saves before they hit the
+	 * Y.Doc/transport. This consolidated factory wraps the adapter in
+	 * `createDebouncedAdapter` BY DEFAULT (the headless
+	 * `createCollabDataPlugin` accepts any adapter, so a bare
+	 * `createYjsAdapter` would otherwise save on every keystroke and
+	 * flood the Y.Doc). Default `150` ms. Set `0` to opt out (e.g. a
+	 * host that already debounces upstream). Only the save path is
+	 * debounced — presence, status, and conflict reads still use the
+	 * live adapter.
+	 */
+	readonly saveDebounceMs?: number;
 	/**
 	 * The host's Puck `Config`. Required for **outgoing** sync (Puck
 	 * data → IR → adapter `save()`). If omitted, the plugin still
@@ -297,6 +310,7 @@ export function createCollabPlugin(
 		computeDelta,
 		awarenessRateLimit,
 		persistence,
+		saveDebounceMs,
 		puckConfig,
 		validateRemoteIR,
 		onValidationFailure,
@@ -324,8 +338,17 @@ export function createCollabPlugin(
 		persistence,
 	});
 
+	// P2 — coalesce keystroke-rate local saves by default. Only the
+	// data plugin's save path is wrapped; presence/status/conflict
+	// reads below stay on the live `adapter`. `saveDebounceMs: 0`
+	// opts out for hosts that debounce upstream.
+	const saveAdapter =
+		saveDebounceMs === 0
+			? adapter
+			: createDebouncedAdapter(adapter, { ms: saveDebounceMs ?? 150 });
+
 	const dataPlugin = createCollabDataPlugin({
-		adapter,
+		adapter: saveAdapter,
 		puckConfig,
 		localPeer: self,
 		validateRemoteIR,
