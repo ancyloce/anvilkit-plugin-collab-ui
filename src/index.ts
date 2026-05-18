@@ -1,8 +1,12 @@
 export {
 	CollabUIProvider,
 	useCollabAdapter,
+	useCollabConflictQueue,
 	useCollabConflicts,
 	useCollabContext,
+	useCollabCursorVisibility,
+	useCollabIdentity,
+	useCollabMetrics,
 	useCollabPeers,
 	useCollabSelf,
 	useCollabStatus,
@@ -22,6 +26,10 @@ export {
 	CollabSettingsPopover,
 	type CollabSettingsPopoverProps,
 } from "./components/collab-settings-popover.js";
+export {
+	CollabPresencePublisher,
+	type CollabPresencePublisherProps,
+} from "./components/collab-presence-publisher.js";
 export {
 	ConflictNoticeCenter,
 	type ConflictNoticeCenterProps,

@@ -21,38 +21,56 @@ pnpm add @anvilkit/collab-ui @anvilkit/plugin-collab-yjs @anvilkit/core react re
 
 ## Quickstart
 
+`createCollabPlugin()` is the integration surface most hosts want: one
+factory call returns a single `StudioPlugin` that bundles the Yjs
+data-sync plugin **plus** the collab UI (provider, presence overlay,
+conflict toaster, collaborator avatar stack). The host owns identity
+(`self`) and transport (`doc` / optional `awareness`).
+
 ```tsx
 import { Studio } from "@anvilkit/core";
-import { createCollabYjsPlugin } from "@anvilkit/plugin-collab-yjs";
-import {
-  CollabUIProvider,
-  CollabRoomBar,
-  PeerAvatarStack,
-  PresenceLayer,
-  SyncActivityIndicator,
-} from "@anvilkit/collab-ui";
+import { createCollabPlugin } from "@anvilkit/collab-ui";
+import { Doc as YDoc } from "yjs";
 
-const collab = createCollabYjsPlugin({ /* … */ });
+const doc = new YDoc();
 
 export default function EditorPage() {
   return (
-    <CollabUIProvider plugin={collab}>
-      <header>
-        <CollabRoomBar />
-        <PeerAvatarStack />
-        <SyncActivityIndicator />
-      </header>
-      <Studio puckConfig={puckConfig} plugins={[collab]} />
-      <PresenceLayer />
-    </CollabUIProvider>
+    <Studio
+      puckConfig={puckConfig}
+      plugins={[
+        createCollabPlugin({
+          doc,
+          self: { id: "alice", displayName: "Alice", color: "#f43f5e" },
+          puckConfig,
+        }),
+      ]}
+    />
   );
 }
 ```
 
-`CollabUIProvider` subscribes to the plugin's status, peer, and
-conflict streams once and fans them out via context — every primitive
-below is selector-thin and re-renders only on the data it actually
-reads.
+The bundled `<PresenceLayer>`, `<ConflictNoticeCenter>`, and the
+`collaborators` slot are mounted by the plugin automatically; pass
+`presence: { enabled: false }` (etc.) to opt out. Power users who want
+only the headless adapter can still import `createYjsAdapter` /
+`createCollabDataPlugin` from `@anvilkit/plugin-collab-yjs` and wrap
+their tree in `<CollabUIProvider adapter={adapter} self={self}>`
+directly.
+
+`CollabUIProvider` subscribes to the adapter's status, peer, and
+conflict streams once and fans them out through **separate** contexts
+(adapter / identity / status / peers / conflicts / cursor-visibility)
+— every primitive below is selector-thin and re-renders only on the
+slice it reads, so remote cursor churn never re-renders the status
+pill or conflict toaster.
+
+### Local cursor publishing
+
+`@anvilkit/collab-ui` renders *remote* cursors and selections. To also
+publish the *local* peer's cursor/selection, mount the opt-in
+`<CollabPresencePublisher root={canvasEl} />` (or have the host call
+`adapter.presence.update(...)` itself).
 
 ## Components
 
@@ -65,19 +83,31 @@ reads.
 | `SyncActivityIndicator`    | `…/sync-activity-indicator`                   | "Syncing…" / "Synced" pulse driven by the CRDT update stream.                          |
 | `ConflictNoticeCenter`     | `…/conflict-notice-center`                    | Toast stack for `CollabConflict` events surfaced by the plugin.                        |
 | `ForceResyncDialog`        | `…/force-resync-dialog`                       | Confirmation dialog for the "force resync" action.                                     |
-| `CollabSettingsPopover`    | `…/collab-settings-popover`                   | Per-room settings (display name, presence color, native-tree toggle).                  |
+| `CollabSettingsPopover`    | `…/collab-settings-popover`                   | Per-room settings (display name, presence color, show-remote-cursors toggle, room).    |
+| `CollabPresencePublisher`  | `…/collab-presence-publisher`                 | Opt-in: publishes the local cursor + Puck selection into awareness.                    |
 
 ## Hooks
 
 Selector hooks for hosts that want to build their own UI instead of
 using the bundled components:
 
-- `useCollabAdapter()` — the underlying `CollabAdapter` instance
-- `useCollabStatus()` — `'connecting' | 'connected' | 'disconnected' | 'reconnecting'`
-- `useCollabSelf()` — the local user's `CollabSelf` (id, name, color)
+- `useCollabAdapter()` — the underlying `YjsSnapshotAdapter` instance
+- `useCollabStatus()` — discriminated `ConnectionStatus`, one of
+  `{ kind: "connecting" }`, `{ kind: "synced", since }`,
+  `{ kind: "offline", since, queuedEdits }`,
+  `{ kind: "reconnecting", attempt, backoffMs }`, or
+  `{ kind: "error", message, recoverable }`
+- `useCollabSelf()` — the local peer's `PeerInfo` (id, displayName, color)
+- `useCollabIdentity()` — `{ self, updateSelf }` (identity context only)
 - `useCollabPeers()` — array of remote peers with live presence
 - `useCollabConflicts()` — current conflict queue
-- `useCollabContext()` — the full context value (for advanced cases)
+- `useCollabConflictQueue()` — `{ conflicts, dismissConflict, clearConflicts }`
+- `useCollabCursorVisibility()` — `{ showRemoteCursors, setShowRemoteCursors }`,
+  the shared source of truth for the settings toggle and `PresenceLayer`
+- `useCollabMetrics(pollMs?)` — polled `MetricsSnapshot | null` from
+  `adapter.metrics()` (latency p50/p95, awareness churn, degraded, …)
+- `useCollabContext()` — the full composite context value (re-renders on
+  any change; prefer the narrow hooks above)
 
 ## Dependency contract
 
