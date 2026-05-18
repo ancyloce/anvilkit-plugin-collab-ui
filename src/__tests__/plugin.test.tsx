@@ -22,6 +22,7 @@ import { act, render, renderHook } from "@testing-library/react";
 import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import packageJson from "../../package.json";
 import { createFakeAdapter } from "./test-utils.js";
 
 // Hold the fake adapter created per-test in a hoisted variable that the
@@ -111,6 +112,13 @@ describe("createCollabPlugin — plugin shape", () => {
 		expect(plugin.meta.id).toBe("@anvilkit/collab");
 		expect(plugin.meta.name).toBe("Collaboration");
 		expect(typeof plugin.register).toBe("function");
+	});
+
+	// Metadata drift guard: META.version is derived from package.json,
+	// so a Changesets bump can never leave the runtime version stale.
+	it("exposes a meta.version that matches package.json", () => {
+		const plugin = createCollabPlugin({ doc: FAKE_DOC, self: ALICE });
+		expect(plugin.meta.version).toBe(packageJson.version);
 	});
 
 	it("registration carries lifecycle hooks inherited from the data plugin", async () => {

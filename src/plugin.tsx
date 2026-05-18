@@ -52,6 +52,8 @@ import type { Config as PuckConfig } from "@puckeditor/core";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 
+import packageJson from "../package.json";
+
 /**
  * Re-routed `Y.Doc` / `Awareness` types: we don't add `yjs` or
  * `y-protocols` as direct dependencies of this package; both arrive
@@ -210,7 +212,9 @@ const PACKAGE_NAME = "@anvilkit/collab-ui";
 const META: StudioPluginMeta = {
 	id: "@anvilkit/collab",
 	name: "Collaboration",
-	version: "0.1.0",
+	// Derived from package.json so a Changesets bump can never drift the
+	// runtime metadata; the metadata-drift test guards regressions.
+	version: packageJson.version,
 	coreVersion: "^0.1.0-alpha",
 	description:
 		"Realtime collaboration: presence cursors, conflict diagnostics, and Yjs CRDT sync. Bundles @anvilkit/plugin-collab-yjs data sync with @anvilkit/collab-ui presence chrome.",

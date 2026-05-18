@@ -7,7 +7,7 @@ DOM. This package fills in the UI: a context provider that surfaces
 the live collab state plus a set of shadcn-style components that
 host apps drop into their editor chrome.
 
-> **Release-candidate (0.1.0-rc.0).** Tracks `@anvilkit/plugin-collab-yjs`
+> **Release-candidate (0.1.0-rc.1).** Tracks `@anvilkit/plugin-collab-yjs`
 > on the `@beta` npm tag. Both packages cut a joint GA together once
 > the SnapshotAdapter v2 contract is frozen.
 
