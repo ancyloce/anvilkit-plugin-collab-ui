@@ -1,43 +1,57 @@
 "use client";
 
+import { Button } from "@anvilkit/ui/button";
+import { CopyButton } from "@anvilkit/ui/components/animate-ui/components/buttons/copy";
+import { Switch } from "@anvilkit/ui/components/animate-ui/components/base/switch";
 import {
 	Popover,
-	PopoverTrigger,
 	PopoverPanel,
 	PopoverTitle,
+	PopoverTrigger,
 } from "@anvilkit/ui/components/animate-ui/components/base/popover";
-import { Switch } from "@anvilkit/ui/components/animate-ui/components/base/switch";
-import { CopyButton } from "@anvilkit/ui/components/animate-ui/components/buttons/copy";
+import { Field, FieldGroup, FieldLabel } from "@anvilkit/ui/field";
+import { Input } from "@anvilkit/ui/input";
 import { Settings } from "lucide-react";
-import { type ChangeEvent, type ReactNode, useId, useState } from "react";
+import { type ChangeEvent, type ReactNode, useId } from "react";
 
-import { useCollabContext } from "../context.js";
-import { cn } from "../lib/cn.js";
+import { useCollabCursorVisibility, useCollabIdentity } from "../context.js";
 
 export interface CollabSettingsPopoverProps {
 	readonly className?: string;
 	readonly roomId?: string;
 	readonly roomLink?: string;
+	/**
+	 * Optional notify hook for hosts that also want to observe the
+	 * toggle. The toggle's source of truth is the shared
+	 * `useCollabCursorVisibility()` context (review §C3 / §4.3); this
+	 * callback fires *in addition* to updating context.
+	 */
 	readonly onShowRemoteCursorsChange?: (show: boolean) => void;
+	/**
+	 * @deprecated The initial value now comes from
+	 * `<CollabUIProvider>` context (defaults to `true`). Kept for
+	 * source compatibility; no longer read.
+	 */
 	readonly initialShowRemoteCursors?: boolean;
 }
 
 export function CollabSettingsPopover(
 	props: CollabSettingsPopoverProps,
 ): ReactNode {
-	const { self, updateSelf } = useCollabContext();
+	const { self, updateSelf } = useCollabIdentity();
+	const { showRemoteCursors, setShowRemoteCursors } =
+		useCollabCursorVisibility();
 	const nameId = useId();
 	const colorId = useId();
 	const cursorsId = useId();
-	const [showRemoteCursors, setShowRemoteCursors] = useState(
-		props.initialShowRemoteCursors ?? true,
-	);
 
 	function handleNameChange(event: ChangeEvent<HTMLInputElement>): void {
 		updateSelf({ displayName: event.target.value });
 	}
 
 	function handleColorChange(event: ChangeEvent<HTMLInputElement>): void {
+		// Color is normalized inside `updateSelf` before it reaches
+		// awareness (review §B4 / §B5).
 		updateSelf({ color: event.target.value });
 	}
 
@@ -51,14 +65,18 @@ export function CollabSettingsPopover(
 	return (
 		<Popover>
 			<PopoverTrigger
-				aria-label="Collaboration settings"
 				data-slot="collab-settings-trigger"
-				className={cn(
-					"inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-muted-foreground hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-					props.className,
-				)}
+				render={
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon"
+						aria-label="Collaboration settings"
+						className={props.className}
+					/>
+				}
 			>
-				<Settings className="size-4" aria-hidden="true" />
+				<Settings aria-hidden="true" />
 			</PopoverTrigger>
 			<PopoverPanel
 				data-slot="collab-settings-popover"
@@ -67,47 +85,44 @@ export function CollabSettingsPopover(
 				className="w-72"
 			>
 				<PopoverTitle className="font-medium">Collaboration</PopoverTitle>
-				<form className="mt-3 grid gap-3">
-					<label className="grid gap-1" htmlFor={nameId}>
-						<span className="text-xs text-foreground/70">Display name</span>
-						<input
+				<FieldGroup className="mt-3">
+					<Field>
+						<FieldLabel htmlFor={nameId}>Display name</FieldLabel>
+						<Input
 							id={nameId}
 							type="text"
-							defaultValue={self.displayName ?? self.id}
+							value={self.displayName ?? self.id}
 							onChange={handleNameChange}
-							className="h-8 rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 						/>
-					</label>
-					<label className="grid gap-1" htmlFor={colorId}>
-						<span className="text-xs text-foreground/70">Peer color</span>
-						<input
+					</Field>
+					<Field>
+						<FieldLabel htmlFor={colorId}>Peer color</FieldLabel>
+						<Input
 							id={colorId}
 							type="color"
-							defaultValue={normalizeHexColor(self.color)}
+							value={normalizeHexColor(self.color)}
 							onChange={handleColorChange}
-							className="h-8 w-16 cursor-pointer rounded-md border bg-background"
+							className="h-8 w-16 cursor-pointer p-1"
 						/>
-					</label>
-					<div className="flex items-center justify-between gap-3">
-						<span id={cursorsId} className="text-xs text-foreground/70">
-							Show remote cursors
-						</span>
+					</Field>
+					<Field orientation="horizontal">
+						<FieldLabel id={cursorsId}>Show remote cursors</FieldLabel>
 						<Switch
 							aria-labelledby={cursorsId}
 							checked={showRemoteCursors}
 							onCheckedChange={handleToggleCursors}
 							nativeButton
 						/>
-					</div>
+					</Field>
 					{props.roomId !== undefined ? (
-						<div className="grid gap-1">
-							<span className="text-xs text-foreground/70">Room</span>
+						<Field>
+							<FieldLabel>Room</FieldLabel>
 							<div className="flex items-center gap-2">
-								<input
+								<Input
 									type="text"
 									readOnly
 									value={props.roomId}
-									className="h-8 flex-1 rounded-md border bg-muted px-2 text-sm"
+									className="flex-1 bg-muted"
 								/>
 								<CopyButton
 									content={linkToCopy || props.roomId}
@@ -116,9 +131,9 @@ export function CollabSettingsPopover(
 									size="sm"
 								/>
 							</div>
-						</div>
+						</Field>
 					) : null}
-				</form>
+				</FieldGroup>
 			</PopoverPanel>
 		</Popover>
 	);
