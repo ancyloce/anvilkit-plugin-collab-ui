@@ -8,7 +8,7 @@ import {
 import { Avatar, AvatarFallback } from "@anvilkit/ui/avatar";
 import type { ReactElement, ReactNode } from "react";
 
-import { useCollabContext } from "../context.js";
+import { useCollabPeers, useCollabSelf } from "../context.js";
 import { cn } from "../lib/cn.js";
 
 export interface PeerAvatarStackProps {
@@ -16,8 +16,20 @@ export interface PeerAvatarStackProps {
 	readonly maxVisible?: number;
 }
 
+/**
+ * Stacked collaborator avatars. Reads only identity + peers context,
+ * so it does not re-render on status / conflict / cursor churn
+ * (review §C2).
+ *
+ * Remote peer colors are rendered into inline `background` styles
+ * below. Safe because `@anvilkit/plugin-collab-yjs` sanitizes inbound
+ * awareness via `validatePeerInfo` / `validatePresenceState` before
+ * peers reach context; the local `self` color is normalized in
+ * `CollabUIProvider.updateSelf` (review §B4).
+ */
 export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
-	const { self, peers } = useCollabContext();
+	const self = useCollabSelf();
+	const peers = useCollabPeers();
 	const collaborators: readonly PresenceState[] = [{ peer: self }, ...peers];
 	const max = props.maxVisible ?? 5;
 	const visible = collaborators.slice(0, max);
