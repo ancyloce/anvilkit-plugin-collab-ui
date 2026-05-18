@@ -8,16 +8,20 @@ import {
 } from "@anvilkit/ui/components/animate-ui/components/base/popover";
 import { useId, type ReactNode } from "react";
 
-import { useCollabStatus } from "../context.js";
+import { useCollabMetrics, useCollabStatus } from "../context.js";
 import { cn } from "../lib/cn.js";
 import type { ConnectionStatus } from "@anvilkit/plugin-collab-yjs";
 
+// Semantic tokens only (review §B3). The theme defines no `warning`
+// token, so non-terminal states fall back to `muted-foreground`;
+// `synced` uses `primary`, `error` uses `destructive`. This keeps the
+// dot theme-aware (light/dark) instead of hard-coding palette colors.
 const DOT_CLASS: Record<ConnectionStatus["kind"], string> = {
-	connecting: "bg-slate-400 animate-pulse",
-	synced: "bg-emerald-500",
-	offline: "bg-amber-500",
-	reconnecting: "bg-amber-500 animate-pulse",
-	error: "bg-rose-500",
+	connecting: "bg-muted-foreground animate-pulse",
+	synced: "bg-primary",
+	offline: "bg-muted-foreground",
+	reconnecting: "bg-muted-foreground animate-pulse",
+	error: "bg-destructive",
 };
 
 function statusLabel(status: ConnectionStatus): string {
@@ -46,7 +50,12 @@ export function SyncActivityIndicator(
 	props: SyncActivityIndicatorProps,
 ): ReactNode {
 	const status = useCollabStatus();
+	const metrics = useCollabMetrics();
 	const popoverId = useId();
+	// Manual props win as host overrides; otherwise fall back to live
+	// adapter metrics (review §C5 / §4.5).
+	const latencyMs = props.latencyMs ?? metrics?.syncLatencyP95Ms ?? undefined;
+	const validationFailures = metrics?.presenceValidationFailures ?? 0;
 	return (
 		<Popover>
 			<PopoverTrigger
@@ -83,10 +92,24 @@ export function SyncActivityIndicator(
 					{statusLabel(status)}
 				</PopoverTitle>
 				<dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-foreground/70">
-					{props.latencyMs !== undefined ? (
+					{latencyMs !== undefined && latencyMs !== null ? (
 						<>
 							<dt>Latency p95</dt>
-							<dd>{props.latencyMs} ms</dd>
+							<dd>{latencyMs} ms</dd>
+						</>
+					) : null}
+					{metrics?.degraded ? (
+						<>
+							<dt>Mode</dt>
+							<dd data-testid="sync-degraded">Degraded</dd>
+						</>
+					) : null}
+					{validationFailures > 0 ? (
+						<>
+							<dt>Presence errors</dt>
+							<dd data-testid="sync-validation-failures">
+								{validationFailures}
+							</dd>
 						</>
 					) : null}
 					{status.kind === "offline" ? (
