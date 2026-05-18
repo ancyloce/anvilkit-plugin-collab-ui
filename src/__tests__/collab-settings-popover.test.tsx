@@ -20,7 +20,7 @@ describe("<CollabSettingsPopover />", () => {
 		expect(trigger?.getAttribute("aria-label")).toBe("Collaboration settings");
 	});
 
-	it("toggles the remote cursor setting and updates its visual state", async () => {
+	it("toggles the shared cursor-visibility context and notifies the host", async () => {
 		ensurePointerEvent();
 		const { adapter } = createFakeAdapter();
 		const onShowRemoteCursorsChange = vi.fn();
@@ -28,7 +28,6 @@ describe("<CollabSettingsPopover />", () => {
 			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
 				<CollabSettingsPopover
 					roomId="demo"
-					initialShowRemoteCursors={false}
 					onShowRemoteCursorsChange={onShowRemoteCursorsChange}
 				/>
 			</CollabUIProvider>,
@@ -39,15 +38,17 @@ describe("<CollabSettingsPopover />", () => {
 			name: "Show remote cursors",
 		});
 
-		expect(toggle).toHaveAttribute("aria-checked", "false");
-		expect(toggle).toHaveAttribute("data-unchecked", "");
+		// Source of truth is <CollabUIProvider> context, which defaults
+		// to visible (review §C3 / §4.3).
+		expect(toggle).toHaveAttribute("aria-checked", "true");
+		expect(toggle).toHaveAttribute("data-checked", "");
 
 		fireEvent.click(toggle);
 
-		expect(onShowRemoteCursorsChange).toHaveBeenCalledWith(true);
+		expect(onShowRemoteCursorsChange).toHaveBeenCalledWith(false);
 		await waitFor(() => {
-			expect(toggle).toHaveAttribute("aria-checked", "true");
-			expect(toggle).toHaveAttribute("data-checked", "");
+			expect(toggle).toHaveAttribute("aria-checked", "false");
+			expect(toggle).toHaveAttribute("data-unchecked", "");
 		});
 	});
 });
