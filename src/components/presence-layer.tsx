@@ -8,10 +8,16 @@ import type { PresenceState } from "@anvilkit/plugin-version-history";
 import { motion, useSpring } from "motion/react";
 import { useEffect, type ReactNode } from "react";
 
-import { useCollabPeers } from "../context.js";
+import { useCollabCursorVisibility, useCollabPeers } from "../context.js";
 import { cn } from "../lib/cn.js";
 
 export interface CollabPresenceLayerProps {
+	/**
+	 * Per-instance override for remote-cursor visibility. When
+	 * omitted, the layer follows the shared
+	 * `useCollabCursorVisibility()` state that the bundled
+	 * `<CollabSettingsPopover>` toggle writes (review §C3 / §4.3).
+	 */
 	readonly showCursors?: boolean;
 	readonly resolveSelectionRect?: (
 		nodeId: string,
@@ -31,10 +37,22 @@ const DEFAULT_COLOR = "#7c3aed";
  * peer's pointer moves smoothly between awareness frames instead
  * of jumping. Selection rings still delegate to the static
  * `PresenceSelectionRing` from `@anvilkit/ui/presence`.
+ *
+ * Remote peer colors are rendered into inline styles below. This is
+ * safe because `@anvilkit/plugin-collab-yjs` sanitizes inbound
+ * awareness payloads via `validatePeerInfo` / `validatePresenceState`
+ * before they reach this layer (review §B5).
+ *
+ * Note: the remote-cursor node uses `z-50`. This overlay is a canvas
+ * overlay (not a Dialog/Popover), so the explicit z-index is
+ * intentional, but it must stay coordinated with `@anvilkit/core`'s
+ * canvas overlay stacking so cursors are not occluded by other
+ * overlays (review §B5).
  */
 export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 	const peers = useCollabPeers();
-	const showCursors = props.showCursors ?? true;
+	const { showRemoteCursors } = useCollabCursorVisibility();
+	const showCursors = props.showCursors ?? showRemoteCursors;
 	return (
 		<div
 			data-slot="presence-layer"
