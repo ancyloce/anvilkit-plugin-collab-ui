@@ -231,4 +231,4 @@ The factory registers `<PeerAvatarStack>` to the header `collaborators` slot. Th
 
 ### Dependency contract
 
-This package depends on `@anvilkit/plugin-collab-yjs` for its types and event streams. Hosts that don't ship realtime collab should not install it. See the [realtime-collab architecture doc](../../../docs/architecture/realtime-collab.md) for the SnapshotAdapter v2 contract.
+This package depends on `@anvilkit/plugin-collab-yjs` for its types and event streams. Hosts that don't ship realtime collab should not install it. See the realtime-collab architecture doc on the Anvilkit docs site for the SnapshotAdapter v2 contract.
