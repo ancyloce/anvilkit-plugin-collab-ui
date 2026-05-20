@@ -1,52 +1,52 @@
 export {
-	CollabUIProvider,
-	useCollabAdapter,
-	useCollabConflictQueue,
-	useCollabConflicts,
-	useCollabContext,
-	useCollabCursorVisibility,
-	useCollabIdentity,
-	useCollabMetrics,
-	useCollabPeers,
-	useCollabSelf,
-	useCollabStatus,
-	type CollabSelf,
-	type CollabUIContextValue,
-	type CollabUIProviderProps,
+  CollabUIProvider,
+  useCollabAdapter,
+  useCollabConflictQueue,
+  useCollabConflicts,
+  useCollabContext,
+  useCollabCursorVisibility,
+  useCollabIdentity,
+  useCollabMetrics,
+  useCollabPeers,
+  useCollabSelf,
+  useCollabStatus,
+  type CollabSelf,
+  type CollabUIContextValue,
+  type CollabUIProviderProps,
 } from "./context.js";
 export {
-	createCollabPlugin,
-	type CreateCollabPluginOptions,
+  createCollabPlugin,
+  type CreateCollabPluginOptions,
 } from "./plugin.js";
 export {
-	CollabRoomBar,
-	type CollabRoomBarProps,
+  CollabRoomBar,
+  type CollabRoomBarProps,
 } from "./components/collab-room-bar.js";
 export {
-	CollabSettingsPopover,
-	type CollabSettingsPopoverProps,
+  CollabSettingsPopover,
+  type CollabSettingsPopoverProps,
 } from "./components/collab-settings-popover.js";
 export {
-	CollabPresencePublisher,
-	type CollabPresencePublisherProps,
+  CollabPresencePublisher,
+  type CollabPresencePublisherProps,
 } from "./components/collab-presence-publisher.js";
 export {
-	ConflictNoticeCenter,
-	type ConflictNoticeCenterProps,
+  ConflictNoticeCenter,
+  type ConflictNoticeCenterProps,
 } from "./components/conflict-notice-center.js";
 export {
-	ForceResyncDialog,
-	type ForceResyncDialogProps,
+  ForceResyncDialog,
+  type ForceResyncDialogProps,
 } from "./components/force-resync-dialog.js";
 export {
-	PeerAvatarStack,
-	type PeerAvatarStackProps,
+  PeerAvatarStack,
+  type PeerAvatarStackProps,
 } from "./components/peer-avatar-stack.js";
 export {
-	PresenceLayer,
-	type CollabPresenceLayerProps,
+  PresenceLayer,
+  type CollabPresenceLayerProps,
 } from "./components/presence-layer.js";
 export {
-	SyncActivityIndicator,
-	type SyncActivityIndicatorProps,
+  SyncActivityIndicator,
+  type SyncActivityIndicatorProps,
 } from "./components/sync-activity-indicator.js";
