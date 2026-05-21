@@ -38,15 +38,15 @@ import type {
 import {
 	type AwarenessRateLimitOptions,
 	type CollabPolicy,
-	createCollabDataPlugin,
 	type CreateCollabPluginOptions as CreateDataPluginOptions,
-	createDebouncedAdapter,
 	type CreateYjsAdapterOptions,
+	createCollabDataPlugin,
+	createDebouncedAdapter,
 	createYjsAdapter,
 	type PersistenceOptions,
+	type PolicyViolation,
 	type ValidateRemoteIR,
 	type ValidationFailure,
-	type PolicyViolation,
 } from "@anvilkit/plugin-collab-yjs";
 import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import type { Config as PuckConfig } from "@puckeditor/core";
@@ -67,10 +67,6 @@ type YDoc = CreateYjsAdapterOptions["doc"];
 type Awareness = NonNullable<CreateYjsAdapterOptions["awareness"]>;
 
 import {
-	type CollabPresenceLayerProps,
-	PresenceLayer,
-} from "./components/presence-layer.js";
-import {
 	ConflictNoticeCenter,
 	type ConflictNoticeCenterProps,
 } from "./components/conflict-notice-center.js";
@@ -78,6 +74,10 @@ import {
 	PeerAvatarStack,
 	type PeerAvatarStackProps,
 } from "./components/peer-avatar-stack.js";
+import {
+	type CollabPresenceLayerProps,
+	PresenceLayer,
+} from "./components/presence-layer.js";
 import { CollabUIProvider, useCollabSelf } from "./context.js";
 
 /**

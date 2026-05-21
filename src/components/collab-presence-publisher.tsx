@@ -2,24 +2,24 @@
 
 import { usePuckSelection } from "@anvilkit/plugin-collab-yjs";
 import type { PresenceCursor } from "@anvilkit/plugin-version-history";
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { useCollabAdapter, useCollabSelf } from "../context.js";
 
 export interface CollabPresencePublisherProps {
-  /**
-   * Element whose pointer movement is published as the local
-   * cursor. Coordinates are reported relative to this element's
-   * bounding rect (typically the Puck canvas root). When omitted,
-   * the publisher listens on `window` and reports viewport
-   * coordinates.
-   */
-  readonly root?: HTMLElement | null;
-  /**
-   * Set `false` to mount the component without publishing (e.g.
-   * read-only viewers). Defaults to `true`.
-   */
-  readonly enabled?: boolean;
+	/**
+	 * Element whose pointer movement is published as the local
+	 * cursor. Coordinates are reported relative to this element's
+	 * bounding rect (typically the Puck canvas root). When omitted,
+	 * the publisher listens on `window` and reports viewport
+	 * coordinates.
+	 */
+	readonly root?: HTMLElement | null;
+	/**
+	 * Set `false` to mount the component without publishing (e.g.
+	 * read-only viewers). Defaults to `true`.
+	 */
+	readonly enabled?: boolean;
 }
 
 /**
@@ -37,66 +37,66 @@ export interface CollabPresencePublisherProps {
  * frame.
  */
 export function CollabPresencePublisher(
-  props: CollabPresencePublisherProps,
+	props: CollabPresencePublisherProps,
 ): ReactNode {
-  const adapter = useCollabAdapter();
-  const self = useCollabSelf();
-  const selection = usePuckSelection();
-  const enabled = props.enabled ?? true;
+	const adapter = useCollabAdapter();
+	const self = useCollabSelf();
+	const selection = usePuckSelection();
+	const enabled = props.enabled ?? true;
 
-  const selectionRef = useRef(selection);
-  selectionRef.current = selection;
+	const selectionRef = useRef(selection);
+	selectionRef.current = selection;
 
-  useEffect(() => {
-    if (!enabled) return;
-    const presence = adapter.presence;
-    if (!presence) return;
-    const root = props.root;
-    const target: Window | HTMLElement = root ?? window;
-    let frame = 0;
-    let pending: PresenceCursor | null = null;
-    const flush = (): void => {
-      frame = 0;
-      presence.update({
-        peer: self,
-        cursor: pending ?? undefined,
-        selection: selectionRef.current ?? undefined,
-      });
-    };
-    const onMove = (event: PointerEvent): void => {
-      if (root) {
-        const rect = root.getBoundingClientRect();
-        pending = {
-          x: event.clientX - rect.left,
-          y: event.clientY - rect.top,
-        };
-      } else {
-        pending = { x: event.clientX, y: event.clientY };
-      }
-      if (frame === 0) {
-        frame = requestAnimationFrame(flush);
-      }
-    };
-    target.addEventListener("pointermove", onMove as EventListener, {
-      passive: true,
-    });
-    return () => {
-      target.removeEventListener("pointermove", onMove as EventListener);
-      if (frame !== 0) cancelAnimationFrame(frame);
-    };
-  }, [adapter, enabled, props.root, self]);
+	useEffect(() => {
+		if (!enabled) return;
+		const presence = adapter.presence;
+		if (!presence) return;
+		const root = props.root;
+		const target: Window | HTMLElement = root ?? window;
+		let frame = 0;
+		let pending: PresenceCursor | null = null;
+		const flush = (): void => {
+			frame = 0;
+			presence.update({
+				peer: self,
+				cursor: pending ?? undefined,
+				selection: selectionRef.current ?? undefined,
+			});
+		};
+		const onMove = (event: PointerEvent): void => {
+			if (root) {
+				const rect = root.getBoundingClientRect();
+				pending = {
+					x: event.clientX - rect.left,
+					y: event.clientY - rect.top,
+				};
+			} else {
+				pending = { x: event.clientX, y: event.clientY };
+			}
+			if (frame === 0) {
+				frame = requestAnimationFrame(flush);
+			}
+		};
+		target.addEventListener("pointermove", onMove as EventListener, {
+			passive: true,
+		});
+		return () => {
+			target.removeEventListener("pointermove", onMove as EventListener);
+			if (frame !== 0) cancelAnimationFrame(frame);
+		};
+	}, [adapter, enabled, props.root, self]);
 
-  // Publish selection changes immediately, even without a pointer
-  // move, so remote peers see selection highlights promptly.
-  useEffect(() => {
-    if (!enabled) return;
-    const presence = adapter.presence;
-    if (!presence) return;
-    presence.update({
-      peer: self,
-      selection: selection ?? undefined,
-    });
-  }, [adapter, enabled, selection, self]);
+	// Publish selection changes immediately, even without a pointer
+	// move, so remote peers see selection highlights promptly.
+	useEffect(() => {
+		if (!enabled) return;
+		const presence = adapter.presence;
+		if (!presence) return;
+		presence.update({
+			peer: self,
+			selection: selection ?? undefined,
+		});
+	}, [adapter, enabled, selection, self]);
 
-  return null;
+	return null;
 }
