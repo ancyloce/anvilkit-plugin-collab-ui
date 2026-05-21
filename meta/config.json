@@ -1,0 +1,8 @@
+{
+	"id": "@anvilkit/collab",
+	"name": "Collaboration",
+	"version": "0.1.0-rc.2",
+	"coreVersion": "^0.1.0-alpha",
+	"description": "Realtime collaboration: presence cursors, conflict diagnostics, and Yjs CRDT sync. Bundles @anvilkit/plugin-collab-yjs data sync with @anvilkit/collab-ui presence chrome.",
+	"apabilities": { "sidebar": true }
+}
