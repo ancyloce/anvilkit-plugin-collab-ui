@@ -19,9 +19,8 @@
  *        `<IdentitySync>` side-effect component for `onIdentityChange`.
  *      - `overlays` — `<PresenceLayer>` at `"canvas"` placement and
  *        `<ConflictNoticeCenter>` at `"notifications"`.
- *      - `slots` — `<PeerAvatarStack>` claims the header
- *        `"collaborators"` slot (host can still override with the
- *        `collaboratorsSlot` prop on `<Studio>`).
+ *      - `slots` — `<PeerAvatarStack>` at the core `"collaborators"`
+ *        header slot, so collaborator avatars render in `<StudioHeader>`.
  *
  * The factory leaves the host in control of transport: pass your own
  * `Y.Doc` and (optional) `Awareness`. The adapter is constructed
@@ -50,8 +49,9 @@ import {
 } from "@anvilkit/plugin-collab-yjs";
 import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import type { Config as PuckConfig } from "@puckeditor/core";
+import { UsersRound } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { createElement, useEffect, useRef } from "react";
 
 import config from "../meta/config.json";
 import packageJson from "../package.json";
@@ -70,10 +70,7 @@ import {
 	ConflictNoticeCenter,
 	type ConflictNoticeCenterProps,
 } from "./components/conflict-notice-center.js";
-import {
-	PeerAvatarStack,
-	type PeerAvatarStackProps,
-} from "./components/peer-avatar-stack.js";
+import { PeerAvatarStack } from "./components/peer-avatar-stack.js";
 import {
 	type CollabPresenceLayerProps,
 	PresenceLayer,
@@ -211,14 +208,6 @@ export interface CreateCollabPluginOptions {
 	readonly notifications?: ConflictNoticeCenterProps & {
 		readonly enabled?: boolean;
 	};
-	/**
-	 * Props forwarded to the header `<PeerAvatarStack>` claiming the
-	 * `collaborators` slot. The host's `collaboratorsSlot` prop on
-	 * `<Studio>` still wins per the plugin contract.
-	 */
-	readonly collaboratorsStack?: PeerAvatarStackProps & {
-		readonly enabled?: boolean;
-	};
 }
 
 const PACKAGE_NAME = "@anvilkit/collab-ui";
@@ -228,6 +217,7 @@ const PACKAGE_NAME = "@anvilkit/collab-ui";
 const META: StudioPluginMeta = {
 	...config,
 	version: packageJson.version,
+	icon: createElement(UsersRound),
 };
 
 /**
@@ -316,7 +306,6 @@ export function createCollabPlugin(
 		onSaveError,
 		presence: presenceOpts,
 		notifications: notificationsOpts,
-		collaboratorsStack: stackOpts,
 	} = options;
 
 	// Build the adapter. The host's `Y.Doc` outlives the adapter; the
@@ -379,14 +368,14 @@ export function createCollabPlugin(
 		return <ConflictNoticeCenter {...rest} />;
 	};
 
-	const CollaboratorsSlotComponent = (): ReactNode => {
-		const { enabled: _e, ...rest } = stackOpts ?? {};
-		return <PeerAvatarStack {...rest} />;
-	};
+	// Collaborator avatar stack for the core `"collaborators"` header
+	// slot. Reads peers/identity from `<CollabUIProvider>` (contributed
+	// above), which wraps the whole Studio tree — chrome included — so
+	// the stack resolves its context inside `<StudioHeader>`.
+	const CollaboratorsSlot = (): ReactNode => <PeerAvatarStack />;
 
 	const presenceEnabled = presenceOpts?.enabled !== false;
 	const notificationsEnabled = notificationsOpts?.enabled !== false;
-	const collaboratorsStackEnabled = stackOpts?.enabled !== false;
 
 	return {
 		meta: META,
@@ -425,14 +414,12 @@ export function createCollabPlugin(
 							] as const)
 						: []),
 				],
-				slots: collaboratorsStackEnabled
-					? [
-							{
-								id: "collaborators",
-								component: CollaboratorsSlotComponent,
-							},
-						]
-					: undefined,
+				slots: [
+					{
+						id: "collaborators",
+						component: CollaboratorsSlot,
+					},
+				],
 			};
 			return registration;
 		},

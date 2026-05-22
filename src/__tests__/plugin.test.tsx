@@ -5,9 +5,8 @@
  *
  * - Returns a single `StudioPlugin` with `meta = @anvilkit/collab`.
  * - `register()` produces a registration carrying hooks (from the
- *   internal data plugin), one provider (`collab-ui`), two overlays
- *   (`collab-presence` at canvas, `collab-conflicts` at notifications),
- *   and one slot (`collaborators`).
+ *   internal data plugin), one provider (`collab-ui`), and two overlays
+ *   (`collab-presence` at canvas, `collab-conflicts` at notifications).
  * - Toggling each UI knob's `enabled: false` removes the corresponding
  *   contribution.
  * - The host-provided `onIdentityChange` callback fires when the
@@ -135,7 +134,7 @@ describe("createCollabPlugin — plugin shape", () => {
 		expect(typeof registration.hooks?.onDestroy).toBe("function");
 	});
 
-	it("contributes one provider (collab-ui), two overlays, one slot", async () => {
+	it("contributes one provider (collab-ui), two overlays, and the collaborators slot", async () => {
 		const plugin = createCollabPlugin({ doc: FAKE_DOC, self: ALICE });
 		const registration = await plugin.register(makeCtx());
 
@@ -152,6 +151,9 @@ describe("createCollabPlugin — plugin shape", () => {
 			"notifications",
 		);
 
+		// The collaborator avatar stack is contributed to the core
+		// `"collaborators"` header slot; `<StudioHeader>` renders it in the
+		// header-actions row.
 		expect(registration.slots).toHaveLength(1);
 		expect(registration.slots?.[0]?.id).toBe("collaborators");
 		expect(typeof registration.slots?.[0]?.component).toBe("function");
@@ -177,16 +179,6 @@ describe("createCollabPlugin — plugin shape", () => {
 		const registration = await plugin.register(makeCtx());
 		const ids = (registration.overlays ?? []).map((o) => o.id);
 		expect(ids).toEqual(["collab-presence"]);
-	});
-
-	it("omits the collaborators slot when collaboratorsStack.enabled is false", async () => {
-		const plugin = createCollabPlugin({
-			doc: FAKE_DOC,
-			self: ALICE,
-			collaboratorsStack: { enabled: false },
-		});
-		const registration = await plugin.register(makeCtx());
-		expect(registration.slots).toBeUndefined();
 	});
 });
 
