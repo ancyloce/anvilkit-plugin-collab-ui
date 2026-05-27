@@ -1,6 +1,6 @@
 # @anvilkit/collab-ui
 
-> **Release candidate (`0.1.0-rc.2`).** Tracks `@anvilkit/plugin-collab-yjs` on the `@next` npm tag. Both packages cut a joint GA once the SnapshotAdapter v2 contract is frozen.
+> **Release candidate (`0.1.0-rc.4`).** Tracks `@anvilkit/plugin-collab-yjs` on the `@next` npm tag. Both packages cut a joint GA once the SnapshotAdapter v2 contract is frozen.
 
 Host UI primitives for [`@anvilkit/plugin-collab-yjs`](../plugin-collab-yjs/README.md). The Yjs plugin is headless — it ships the CRDT layer, the SnapshotAdapter, presence wiring, and conflict diagnostics, but no DOM. This package fills in the UI: a context provider that surfaces live collab state plus a set of shadcn-style components host apps drop into their editor chrome. The consolidated `createCollabPlugin()` factory bundles both packages into a single `StudioPlugin` for the common case.
 
@@ -37,7 +37,7 @@ export default function EditorPage() {
 }
 ```
 
-The bundled `<PresenceLayer>`, `<ConflictNoticeCenter>`, and the `collaborators` slot are mounted by the plugin automatically. Pass `presence: { enabled: false }` (etc.) to opt out of any individual contribution.
+The bundled `<PresenceLayer>` and `<ConflictNoticeCenter>` are mounted by the plugin automatically — pass `presence: { enabled: false }` or `notifications: { enabled: false }` to opt out of either. The collaborator avatar stack is always contributed to the core `collaborators` header slot; override it via the host's `collaboratorsSlot` prop on `<Studio>` if you need different chrome.
 
 ## Core features
 
@@ -68,7 +68,6 @@ function createCollabPlugin(options: CreateCollabPluginOptions): StudioPlugin;
 | `validateRemoteIR`, `onValidationFailure`, `policy`, `onPolicyViolation`, `onSaveError`                             | —                                                   | —            | Forwarded to `createCollabDataPlugin`.                                                                                                               |
 | `presence`                                                                                                          | `CollabPresenceLayerProps & { enabled?: boolean }`  | mounted      | Props for the auto-mounted `<PresenceLayer>`. `enabled: false` skips it.                                                                             |
 | `notifications`                                                                                                     | `ConflictNoticeCenterProps & { enabled?: boolean }` | mounted      | Props for the auto-mounted `<ConflictNoticeCenter>`.                                                                                                 |
-| `collaboratorsStack`                                                                                                | `PeerAvatarStackProps & { enabled?: boolean }`      | mounted      | Props for the auto-mounted `<PeerAvatarStack>` in the `collaborators` slot.                                                                          |
 
 ### Provider
 
@@ -92,7 +91,7 @@ Wrap the editor tree in the provider directly when you want only the headless ad
 | `useCollabStatus()`           | `ConnectionStatus`                               | Discriminated union (`connecting` / `synced` / `offline` / `reconnecting` / `error`). |
 | `useCollabSelf()`             | `PeerInfo`                                       | Local peer identity.                                                                  |
 | `useCollabIdentity()`         | `{ self, updateSelf }`                           | Use for identity-only consumers; doesn't re-render on peer / status churn.            |
-| `useCollabPeers()`            | `readonly PeerInfo[]` (with live presence)       | High-churn slice — keep its consumers small.                                          |
+| `useCollabPeers()`            | `readonly PresenceState[]`                       | High-churn slice (peer identity + live cursor/selection) — keep its consumers small.  |
 | `useCollabConflicts()`        | `readonly ConflictEvent[]`                       | Read-only conflict queue.                                                             |
 | `useCollabConflictQueue()`    | `{ conflicts, dismissConflict, clearConflicts }` | Mutating consumer.                                                                    |
 | `useCollabCursorVisibility()` | `{ showRemoteCursors, setShowRemoteCursors }`    | Shared source of truth for the settings toggle and `PresenceLayer`.                   |
@@ -219,7 +218,7 @@ If you genuinely need every slice in one component, use `useCollabContext()` —
 | You want a one-line integration with the default chrome.                      | `createCollabPlugin()` from this package.                                                                                     |
 | You want only the data layer (read-only viewer, custom UI, server-side sync). | `createYjsAdapter` + `createCollabDataPlugin` from `@anvilkit/plugin-collab-yjs`.                                             |
 | You want the hooks but custom components.                                     | Headless adapter + manual `<CollabUIProvider>`.                                                                               |
-| You want some of the bundled UI but not all.                                  | `createCollabPlugin()` with `presence.enabled: false` / `notifications.enabled: false` / `collaboratorsStack.enabled: false`. |
+| You want some of the bundled UI but not all.                                  | `createCollabPlugin()` with `presence.enabled: false` / `notifications.enabled: false` (the `collaborators` slot is always contributed — override via `<Studio collaboratorsSlot>`). |
 
 ### Cursor visibility toggle
 
