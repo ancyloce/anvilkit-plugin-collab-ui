@@ -10,8 +10,8 @@ import type { PeerInfo, PresenceState } from "@anvilkit/plugin-version-history";
 import {
 	createContext,
 	type ReactNode,
+	use,
 	useCallback,
-	useContext,
 	useEffect,
 	useMemo,
 	useRef,
@@ -297,21 +297,21 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	);
 
 	return (
-		<AdapterContext.Provider value={adapter}>
-			<IdentityContext.Provider value={identityValue}>
-				<StatusContext.Provider value={status}>
-					<PeersContext.Provider value={peers}>
-						<PeerIdentitiesContext.Provider value={peerIdentities}>
-							<ConflictsContext.Provider value={conflictsValue}>
-								<CursorVisibilityContext.Provider value={cursorVisibilityValue}>
+		<AdapterContext value={adapter}>
+			<IdentityContext value={identityValue}>
+				<StatusContext value={status}>
+					<PeersContext value={peers}>
+						<PeerIdentitiesContext value={peerIdentities}>
+							<ConflictsContext value={conflictsValue}>
+								<CursorVisibilityContext value={cursorVisibilityValue}>
 									{children}
-								</CursorVisibilityContext.Provider>
-							</ConflictsContext.Provider>
-						</PeerIdentitiesContext.Provider>
-					</PeersContext.Provider>
-				</StatusContext.Provider>
-			</IdentityContext.Provider>
-		</AdapterContext.Provider>
+								</CursorVisibilityContext>
+							</ConflictsContext>
+						</PeerIdentitiesContext>
+					</PeersContext>
+				</StatusContext>
+			</IdentityContext>
+		</AdapterContext>
 	);
 }
 
@@ -323,15 +323,15 @@ function useRequired<T>(ctx: T | null, hook: string): T {
 }
 
 export function useCollabAdapter(): YjsSnapshotAdapter {
-	return useRequired(useContext(AdapterContext), "useCollabAdapter");
+	return useRequired(use(AdapterContext), "useCollabAdapter");
 }
 
 export function useCollabStatus(): ConnectionStatus {
-	return useRequired(useContext(StatusContext), "useCollabStatus");
+	return useRequired(use(StatusContext), "useCollabStatus");
 }
 
 export function useCollabPeers(): readonly PresenceState[] {
-	return useRequired(useContext(PeersContext), "useCollabPeers");
+	return useRequired(use(PeersContext), "useCollabPeers");
 }
 
 /**
@@ -342,14 +342,11 @@ export function useCollabPeers(): readonly PresenceState[] {
  * local peer (mirrors `useCollabPeers()`).
  */
 export function useCollabPeerIdentities(): readonly PeerInfo[] {
-	return useRequired(
-		useContext(PeerIdentitiesContext),
-		"useCollabPeerIdentities",
-	);
+	return useRequired(use(PeerIdentitiesContext), "useCollabPeerIdentities");
 }
 
 export function useCollabSelf(): PeerInfo {
-	return useRequired(useContext(IdentityContext), "useCollabSelf").self;
+	return useRequired(use(IdentityContext), "useCollabSelf").self;
 }
 
 /**
@@ -357,19 +354,18 @@ export function useCollabSelf(): PeerInfo {
  * so consumers do not re-render on cursor / status / conflict churn.
  */
 export function useCollabIdentity(): IdentityContextValue {
-	return useRequired(useContext(IdentityContext), "useCollabIdentity");
+	return useRequired(use(IdentityContext), "useCollabIdentity");
 }
 
 export function useCollabConflicts(): readonly ConflictEvent[] {
-	return useRequired(useContext(ConflictsContext), "useCollabConflicts")
-		.conflicts;
+	return useRequired(use(ConflictsContext), "useCollabConflicts").conflicts;
 }
 
 /**
  * Conflict queue plus its mutators. Reads only `ConflictsContext`.
  */
 export function useCollabConflictQueue(): ConflictsContextValue {
-	return useRequired(useContext(ConflictsContext), "useCollabConflictQueue");
+	return useRequired(use(ConflictsContext), "useCollabConflictQueue");
 }
 
 /**
@@ -378,10 +374,7 @@ export function useCollabConflictQueue(): ConflictsContextValue {
  * reads it.
  */
 export function useCollabCursorVisibility(): CursorVisibilityContextValue {
-	return useRequired(
-		useContext(CursorVisibilityContext),
-		"useCollabCursorVisibility",
-	);
+	return useRequired(use(CursorVisibilityContext), "useCollabCursorVisibility");
 }
 
 /**
