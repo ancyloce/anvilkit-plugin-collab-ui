@@ -1,14 +1,14 @@
 "use client";
 
-import type { PresenceState } from "@anvilkit/plugin-version-history";
+import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import { Avatar, AvatarFallback } from "@anvilkit/ui/avatar";
 import {
 	AvatarGroup,
 	AvatarGroupTooltip,
 } from "@anvilkit/ui/components/animate-ui/components/animate/avatar-group";
-import type { ReactElement, ReactNode } from "react";
+import { memo, type ReactElement, type ReactNode } from "react";
 
-import { useCollabPeers, useCollabSelf } from "../context.js";
+import { useCollabPeerIdentities, useCollabSelf } from "../context.js";
 import { cn } from "../lib/cn.js";
 
 export interface PeerAvatarStackProps {
@@ -29,14 +29,17 @@ export interface PeerAvatarStackProps {
  */
 export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 	const self = useCollabSelf();
-	const peers = useCollabPeers();
-	const collaborators: readonly PresenceState[] = [{ peer: self }, ...peers];
+	// F5 — read the roster-only identities slice (id/displayName/color),
+	// not the full presence frames, so the stack does not re-render on
+	// cursor/selection churn.
+	const peers = useCollabPeerIdentities();
+	const collaborators: readonly PeerInfo[] = [self, ...peers];
 	const max = props.maxVisible ?? 5;
 	const visible = collaborators.slice(0, max);
 	const overflow = Math.max(collaborators.length - visible.length, 0);
 
 	const items: ReactElement[] = visible.map((peer) => (
-		<PeerAvatar key={peer.peer.id} peer={peer} />
+		<PeerAvatar key={peer.id} peer={peer} />
 	));
 	if (overflow > 0) {
 		items.push(<OverflowAvatar key="__overflow" count={overflow} />);
@@ -62,18 +65,25 @@ export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 	);
 }
 
-function PeerAvatar({ peer }: { peer: PresenceState }): ReactNode {
-	const initials = (peer.peer.displayName ?? peer.peer.id)
+// F13 — this consumes a `PeerInfo` directly (not a `PresenceState`), so
+// the awkward `peer.peer.id` double-access is gone. F5 — memoized so an
+// individual avatar only re-renders when its own identity datum changes.
+const PeerAvatar = memo(function PeerAvatar({
+	peer,
+}: {
+	peer: PeerInfo;
+}): ReactNode {
+	const initials = (peer.displayName ?? peer.id)
 		.split(/\s+/)
 		.map((part) => part.charAt(0).toUpperCase())
 		.slice(0, 2)
 		.join("");
-	const background = peer.peer.color ?? "var(--muted)";
-	const label = peer.peer.displayName ?? peer.peer.id;
+	const background = peer.color ?? "var(--muted)";
+	const label = peer.displayName ?? peer.id;
 	return (
 		<Avatar
 			role="listitem"
-			data-peer-id={peer.peer.id}
+			data-peer-id={peer.id}
 			size="sm"
 			className="ring-2 ring-background"
 			style={{ background }}
@@ -97,7 +107,7 @@ function PeerAvatar({ peer }: { peer: PresenceState }): ReactNode {
 			</AvatarGroupTooltip>
 		</Avatar>
 	);
-}
+});
 
 function OverflowAvatar({ count }: { count: number }): ReactNode {
 	return (
