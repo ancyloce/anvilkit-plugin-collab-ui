@@ -1,6 +1,7 @@
 import type {
 	ConflictEvent,
 	ConnectionStatus,
+	MetricsSnapshot,
 	YjsSnapshotAdapter,
 } from "@anvilkit/plugin-collab-yjs";
 import type {
@@ -25,6 +26,7 @@ export function createFakeAdapter(
 	overrides: Partial<{
 		initialStatus: ConnectionStatus;
 		snapshots: readonly SnapshotMeta[];
+		metricsValue: MetricsSnapshot;
 	}> = {},
 ): { adapter: YjsSnapshotAdapter; controls: FakeAdapterControls } {
 	let status: ConnectionStatus =
@@ -94,6 +96,15 @@ export function createFakeAdapter(
 		},
 	};
 
+	const metricsValue = overrides.metricsValue;
+	if (metricsValue !== undefined) {
+		// Mimic the real `metrics.snapshot()`: a fresh object every call, so
+		// the F7 value-equality bail is actually exercised.
+		return {
+			adapter: { ...adapter, metrics: () => ({ ...metricsValue }) },
+			controls,
+		};
+	}
 	return { adapter, controls };
 }
 

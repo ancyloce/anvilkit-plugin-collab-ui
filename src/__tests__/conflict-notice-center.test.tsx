@@ -60,4 +60,44 @@ describe("<ConflictNoticeCenter />", () => {
 		expect(typeof message).toBe("string");
 		expect(message as string).toContain("Bob");
 	});
+
+	it("M1: two same-tick conflicts surface as two toasts with distinct ids", async () => {
+		const { toast } = await import("sonner");
+		const toastFn = toast as unknown as ReturnType<typeof vi.fn>;
+		toastFn.mockClear();
+		const { adapter, controls } = createFakeAdapter();
+		render(
+			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+				<ConflictNoticeCenter />
+			</CollabUIProvider>,
+		);
+
+		// Two overlap conflicts in the same tick share an `at` timestamp but
+		// differ in remote peer + nodes. Keying the toast by bare `at` would
+		// collapse them to one notice (and dismissing it would silently swallow
+		// the sibling). The composite key must keep them distinct.
+		const at = "2026-05-08T00:00:00.000Z";
+		await act(async () => {
+			controls.emitConflict({
+				kind: "overlap",
+				localPeer: { id: "alice" },
+				remotePeer: { id: "bob", displayName: "Bob" },
+				nodeIds: ["hero-1"],
+				at,
+			});
+			controls.emitConflict({
+				kind: "overlap",
+				localPeer: { id: "alice" },
+				remotePeer: { id: "carol", displayName: "Carol" },
+				nodeIds: ["hero-2"],
+				at,
+			});
+		});
+
+		const ids = toastFn.mock.calls.map(
+			(call) => (call[1] as { id?: string } | undefined)?.id,
+		);
+		expect(toastFn.mock.calls).toHaveLength(2);
+		expect(new Set(ids).size).toBe(2);
+	});
 });
