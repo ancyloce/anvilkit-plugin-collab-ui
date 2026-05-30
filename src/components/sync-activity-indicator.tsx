@@ -38,11 +38,47 @@ function statusLabel(status: ConnectionStatus): string {
 	}
 }
 
+/**
+ * Injectable copy for the sync activity panel's static term labels (F14).
+ * Defaults are English; a host localizes by passing overrides. The status
+ * line itself (with its interpolation) is overridden via `formatStatus`.
+ * Per the CLAUDE.md i18n convention, copy is injected — no translations
+ * are bundled here.
+ */
+export interface SyncActivityLabels {
+	readonly latencyP95?: string;
+	readonly mode?: string;
+	readonly degraded?: string;
+	readonly presenceErrors?: string;
+	readonly queuedEdits?: string;
+	readonly syncedSince?: string;
+	readonly backoff?: string;
+	readonly reason?: string;
+	readonly lastSync?: string;
+	readonly lastPeer?: string;
+}
+
+const DEFAULT_SYNC_LABELS = {
+	latencyP95: "Latency p95",
+	mode: "Mode",
+	degraded: "Degraded",
+	presenceErrors: "Presence errors",
+	queuedEdits: "Queued edits",
+	syncedSince: "Synced since",
+	backoff: "Backoff",
+	reason: "Reason",
+	lastSync: "Last sync",
+	lastPeer: "Last peer",
+} as const;
+
 export interface SyncActivityIndicatorProps {
 	readonly className?: string;
 	readonly latencyMs?: number;
 	readonly lastSyncAt?: string;
 	readonly lastPeerName?: string;
+	/** Override the status-line copy (incl. interpolated offline/reconnecting forms). */
+	readonly formatStatus?: (status: ConnectionStatus) => string;
+	readonly labels?: SyncActivityLabels;
 }
 
 export function SyncActivityIndicator(
@@ -55,6 +91,9 @@ export function SyncActivityIndicator(
 	// adapter metrics (review §C5 / §4.5).
 	const latencyMs = props.latencyMs ?? metrics?.syncLatencyP95Ms ?? undefined;
 	const validationFailures = metrics?.presenceValidationFailures ?? 0;
+	// F14 — injectable copy with English defaults.
+	const renderStatus = props.formatStatus ?? statusLabel;
+	const labels = { ...DEFAULT_SYNC_LABELS, ...props.labels };
 	return (
 		<Popover>
 			<PopoverTrigger
@@ -78,7 +117,7 @@ export function SyncActivityIndicator(
 					className="text-foreground/80"
 					data-testid="sync-activity-indicator-label"
 				>
-					{statusLabel(status)}
+					{renderStatus(status)}
 				</span>
 			</PopoverTrigger>
 			<PopoverPanel
@@ -88,24 +127,24 @@ export function SyncActivityIndicator(
 				className="min-w-56 text-sm text-popover-foreground"
 			>
 				<PopoverTitle className="font-medium">
-					{statusLabel(status)}
+					{renderStatus(status)}
 				</PopoverTitle>
 				<dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-foreground/70">
 					{latencyMs !== undefined && latencyMs !== null ? (
 						<>
-							<dt>Latency p95</dt>
+							<dt>{labels.latencyP95}</dt>
 							<dd>{latencyMs} ms</dd>
 						</>
 					) : null}
 					{metrics?.degraded ? (
 						<>
-							<dt>Mode</dt>
-							<dd data-testid="sync-degraded">Degraded</dd>
+							<dt>{labels.mode}</dt>
+							<dd data-testid="sync-degraded">{labels.degraded}</dd>
 						</>
 					) : null}
 					{validationFailures > 0 ? (
 						<>
-							<dt>Presence errors</dt>
+							<dt>{labels.presenceErrors}</dt>
 							<dd data-testid="sync-validation-failures">
 								{validationFailures}
 							</dd>
@@ -113,37 +152,37 @@ export function SyncActivityIndicator(
 					) : null}
 					{status.kind === "offline" ? (
 						<>
-							<dt>Queued edits</dt>
+							<dt>{labels.queuedEdits}</dt>
 							<dd>{status.queuedEdits}</dd>
 						</>
 					) : null}
 					{status.kind === "synced" ? (
 						<>
-							<dt>Synced since</dt>
+							<dt>{labels.syncedSince}</dt>
 							<dd>{formatTime(status.since)}</dd>
 						</>
 					) : null}
 					{status.kind === "reconnecting" ? (
 						<>
-							<dt>Backoff</dt>
+							<dt>{labels.backoff}</dt>
 							<dd>{status.backoffMs} ms</dd>
 						</>
 					) : null}
 					{status.kind === "error" ? (
 						<>
-							<dt>Reason</dt>
+							<dt>{labels.reason}</dt>
 							<dd>{status.message}</dd>
 						</>
 					) : null}
 					{props.lastSyncAt !== undefined ? (
 						<>
-							<dt>Last sync</dt>
+							<dt>{labels.lastSync}</dt>
 							<dd>{formatTime(props.lastSyncAt)}</dd>
 						</>
 					) : null}
 					{props.lastPeerName !== undefined ? (
 						<>
-							<dt>Last peer</dt>
+							<dt>{labels.lastPeer}</dt>
 							<dd>{props.lastPeerName}</dd>
 						</>
 					) : null}
