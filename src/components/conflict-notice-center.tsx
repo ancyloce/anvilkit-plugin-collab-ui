@@ -4,7 +4,7 @@ import type { ConflictEvent } from "@anvilkit/plugin-collab-yjs";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 
-import { useCollabConflictQueue } from "../context.js";
+import { conflictKey, useCollabConflictQueue } from "../context.js";
 import { ForceResyncDialog } from "./force-resync-dialog.js";
 
 export interface ConflictNoticeCenterProps {
@@ -24,37 +24,55 @@ const DEFAULT_FORMAT = (event: ConflictEvent): string => {
 	return `${peerName}'s edit overlapped your unsaved change in ${nodeList}.`;
 };
 
+/**
+ * M6 — FIFO cap on the per-component `seen` set so dedupe state can't
+ * grow unbounded for the component lifetime (each key embeds the full
+ * joined `nodeIds`). Mirrors the adapter's `prunedIds` insertion-ordered
+ * bound.
+ */
+const MAX_SEEN = 512;
+
 export function ConflictNoticeCenter(
 	props: ConflictNoticeCenterProps,
 ): ReactNode {
 	const { conflicts, dismissConflict } = useCollabConflictQueue();
 	const formatter = props.formatMessage ?? DEFAULT_FORMAT;
+	// M6 — keep the latest formatter in a ref so an inline host
+	// `formatMessage` (new identity each render) does not force the effect
+	// to re-walk the whole conflict queue on every render.
+	const formatterRef = useRef(formatter);
+	formatterRef.current = formatter;
 	const seenRef = useRef<Set<string>>(new Set());
 	const [resyncOpen, setResyncOpen] = useState(false);
 
 	useEffect(() => {
 		for (const event of conflicts) {
-			// Key by more than `event.at`: two overlap conflicts can
-			// share an ISO timestamp (same tick, different peers/nodes).
-			// Keying by `at` alone silently dropped the second toast
-			// (review §C6).
-			const key = `${event.at}:${event.localPeer.id}:${
-				event.remotePeer?.id ?? "unknown"
-			}:${event.nodeIds.join("|")}`;
+			// Composite key (not the bare ISO `at`): two overlap conflicts
+			// can share a timestamp in one tick. Used as the toast id AND
+			// the dismiss key so dismissing one never drops its
+			// co-timestamped sibling unacknowledged (M1 / review §C6).
+			const key = conflictKey(event);
 			if (seenRef.current.has(key)) continue;
 			seenRef.current.add(key);
-			toast(formatter(event), {
+			// M6 — FIFO-bound the seen set (insertion-ordered, so the first
+			// entry is the oldest) to keep it from growing for the whole
+			// component lifetime.
+			if (seenRef.current.size > MAX_SEEN) {
+				const oldest = seenRef.current.values().next().value;
+				if (oldest !== undefined) seenRef.current.delete(oldest);
+			}
+			toast(formatterRef.current(event), {
 				id: key,
 				duration: 8000,
 				action: {
 					label: "Force resync",
 					onClick: () => setResyncOpen(true),
 				},
-				onDismiss: () => dismissConflict(event.at),
-				onAutoClose: () => dismissConflict(event.at),
+				onDismiss: () => dismissConflict(key),
+				onAutoClose: () => dismissConflict(key),
 			});
 		}
-	}, [conflicts, dismissConflict, formatter]);
+	}, [conflicts, dismissConflict]);
 
 	return (
 		<>
