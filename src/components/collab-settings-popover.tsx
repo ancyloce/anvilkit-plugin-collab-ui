@@ -27,12 +27,6 @@ export interface CollabSettingsPopoverProps {
 	 * callback fires *in addition* to updating context.
 	 */
 	readonly onShowRemoteCursorsChange?: (show: boolean) => void;
-	/**
-	 * @deprecated The initial value now comes from
-	 * `<CollabUIProvider>` context (defaults to `true`). Kept for
-	 * source compatibility; no longer read.
-	 */
-	readonly initialShowRemoteCursors?: boolean;
 }
 
 export function CollabSettingsPopover(
