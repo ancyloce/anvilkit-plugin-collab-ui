@@ -1,19 +1,14 @@
 {
-	"extends": "@anvilkit/typescript-config/react-library.json",
+	"extends": "@anvilkit/typescript-config/react-library-bundler.json",
 	"compilerOptions": {
 		"baseUrl": ".",
 		"ignoreDeprecations": "6.0",
-		"module": "ESNext",
-		"moduleResolution": "bundler",
 		"outDir": "dist",
 		"rootDir": "src",
 		"paths": {
 			"@anvilkit/collab-ui": ["src"],
 			"@anvilkit/collab-ui/*": ["src/*"]
-		},
-		"strictNullChecks": true,
-		"useDefineForClassFields": true,
-		"verbatimModuleSyntax": true
+		}
 	},
 	"include": ["src/**/*.ts", "src/**/*.tsx"],
 	"exclude": [
