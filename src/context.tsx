@@ -24,13 +24,49 @@ export interface CollabSelf {
 	readonly color: string;
 }
 
+/**
+ * Upper bound on the provider's retained conflict window (F8). The
+ * bundled `<ConflictNoticeCenter>` auto-closes toasts, but a host that
+ * reads `useCollabConflicts()` for a custom panel (no toaster) would
+ * otherwise grow the array for the whole session. Kept as a recent
+ * window of the newest events.
+ */
+const MAX_CONFLICTS = 50;
+
+/**
+ * Stable identity for a conflict event. Composite (not the bare ISO
+ * `at`) because two overlap conflicts can share a timestamp within one
+ * tick — see M1 / review §C6. Used both as the sonner toast id and as
+ * the `dismissConflict` key, so dismissing one never drops a
+ * co-timestamped sibling unacknowledged.
+ *
+ * Encoded with `JSON.stringify` over a tuple (not `:`/`|` concatenation)
+ * so a host-supplied peer id or a node id containing the separator char
+ * cannot alias two genuinely-distinct conflicts into one key — which
+ * would otherwise suppress the second toast and let one dismiss drop
+ * both. Mirrors {@link peerIdentitySignature}'s collision-proof keying.
+ */
+export function conflictKey(event: ConflictEvent): string {
+	return JSON.stringify([
+		event.at,
+		event.localPeer.id,
+		event.remotePeer?.id ?? null,
+		event.nodeIds,
+	]);
+}
+
 export interface CollabUIContextValue {
 	readonly adapter: YjsSnapshotAdapter;
 	readonly self: PeerInfo;
 	readonly status: ConnectionStatus;
 	readonly peers: readonly PresenceState[];
 	readonly conflicts: readonly ConflictEvent[];
-	readonly dismissConflict: (at: string) => void;
+	/**
+	 * Dismiss a single conflict by its composite {@link conflictKey}.
+	 * Keying by the bare ISO `at` would drop every co-timestamped
+	 * conflict emitted in the same tick (M1).
+	 */
+	readonly dismissConflict: (key: string) => void;
 	readonly clearConflicts: () => void;
 	readonly updateSelf: (patch: Partial<CollabSelf>) => void;
 	/**
@@ -65,9 +101,15 @@ const StatusContext = createContext<ConnectionStatus | null>(null);
 
 const PeersContext = createContext<readonly PresenceState[] | null>(null);
 
+// Roster-only peer identities (F5). The value reference changes only
+// when the *set* of peer id/displayName/color changes — never on a
+// cursor/selection-only frame — so `<PeerAvatarStack>` and other
+// identity-only consumers skip cursor-churn re-renders.
+const PeerIdentitiesContext = createContext<readonly PeerInfo[] | null>(null);
+
 interface ConflictsContextValue {
 	readonly conflicts: readonly ConflictEvent[];
-	readonly dismissConflict: (at: string) => void;
+	readonly dismissConflict: (key: string) => void;
 	readonly clearConflicts: () => void;
 }
 const ConflictsContext = createContext<ConflictsContextValue | null>(null);
@@ -152,6 +194,20 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 
 	const status = useExternalStatus(adapter);
 
+	// F5 — derive a roster-only identity list whose reference only
+	// changes when the id/displayName/color *set* changes, so avatar /
+	// identity consumers don't re-render on cursor-only frames. (Computing
+	// derived state into a ref during render is a standard cache pattern —
+	// no external side effect.)
+	const identitySigRef = useRef<string | undefined>(undefined);
+	const identitiesRef = useRef<readonly PeerInfo[]>([]);
+	const identitySig = peerIdentitySignature(peers);
+	if (identitySigRef.current !== identitySig) {
+		identitySigRef.current = identitySig;
+		identitiesRef.current = peers.map((frame) => frame.peer);
+	}
+	const peerIdentities = identitiesRef.current;
+
 	useEffect(() => {
 		setSelfState({
 			id: selfProp.id,
@@ -162,7 +218,15 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 
 	useEffect(() => {
 		const unsub = adapter.onConflict((event) => {
-			setConflicts((prev) => [...prev, event]);
+			// F8 — retain only the most-recent window so a host reading
+			// `useCollabConflicts()` for a custom panel (no auto-closing
+			// toaster) cannot grow this unbounded for the session.
+			setConflicts((prev) => {
+				const next = [...prev, event];
+				return next.length > MAX_CONFLICTS
+					? next.slice(next.length - MAX_CONFLICTS)
+					: next;
+			});
 		});
 		return () => unsub();
 	}, [adapter]);
@@ -171,7 +235,15 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		const presence = adapter.presence;
 		if (!presence) return;
 		const unsub = presence.onPeerChange((next) => {
-			setPeers(dedupeRemotePeers(next, selfRef.current.id));
+			// F2 — keep `PeersContext` identity stable on no-op frames.
+			// `dedupeRemotePeers` always allocates a fresh array, so
+			// without this bail every coalesced inbound frame (H1) would
+			// change the context value and re-render every
+			// `useCollabPeers()` consumer even when no peer datum changed.
+			setPeers((prev) => {
+				const deduped = dedupeRemotePeers(next, selfRef.current.id);
+				return peersShallowEqual(prev, deduped) ? prev : deduped;
+			});
 		});
 		return () => unsub();
 	}, [adapter]);
@@ -183,8 +255,12 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		adapter.presence?.update({ peer: self });
 	}, [adapter, self]);
 
-	const dismissConflict = useCallback((at: string) => {
-		setConflicts((prev) => prev.filter((event) => event.at !== at));
+	const dismissConflict = useCallback((key: string) => {
+		// M1 — filter by the SAME composite key the toaster builds, not the
+		// bare ISO `at`. Two overlap conflicts can share an `at` in one
+		// tick; keying by `at` alone deletes the co-timestamped sibling
+		// unacknowledged.
+		setConflicts((prev) => prev.filter((event) => conflictKey(event) !== key));
 	}, []);
 
 	const clearConflicts = useCallback(() => {
@@ -225,11 +301,13 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 			<IdentityContext.Provider value={identityValue}>
 				<StatusContext.Provider value={status}>
 					<PeersContext.Provider value={peers}>
-						<ConflictsContext.Provider value={conflictsValue}>
-							<CursorVisibilityContext.Provider value={cursorVisibilityValue}>
-								{children}
-							</CursorVisibilityContext.Provider>
-						</ConflictsContext.Provider>
+						<PeerIdentitiesContext.Provider value={peerIdentities}>
+							<ConflictsContext.Provider value={conflictsValue}>
+								<CursorVisibilityContext.Provider value={cursorVisibilityValue}>
+									{children}
+								</CursorVisibilityContext.Provider>
+							</ConflictsContext.Provider>
+						</PeerIdentitiesContext.Provider>
 					</PeersContext.Provider>
 				</StatusContext.Provider>
 			</IdentityContext.Provider>
@@ -254,6 +332,20 @@ export function useCollabStatus(): ConnectionStatus {
 
 export function useCollabPeers(): readonly PresenceState[] {
 	return useRequired(useContext(PeersContext), "useCollabPeers");
+}
+
+/**
+ * Roster-only peer identities (id/displayName/color). The returned
+ * array reference only changes when the *set* of identities changes —
+ * not on cursor / selection frames (F5) — so identity-only consumers
+ * like `<PeerAvatarStack>` skip cursor-churn re-renders. Excludes the
+ * local peer (mirrors `useCollabPeers()`).
+ */
+export function useCollabPeerIdentities(): readonly PeerInfo[] {
+	return useRequired(
+		useContext(PeerIdentitiesContext),
+		"useCollabPeerIdentities",
+	);
 }
 
 export function useCollabSelf(): PeerInfo {
@@ -309,7 +401,15 @@ export function useCollabMetrics(pollMs = 5000): MetricsSnapshot | null {
 			setMetrics(null);
 			return;
 		}
-		const read = (): void => setMetrics(adapter.metrics());
+		const read = (): void =>
+			setMetrics((prev) => {
+				const next = adapter.metrics();
+				// F7 — `metrics.snapshot()` allocates a fresh object every
+				// call, so without this value-equality bail every poll re-
+				// renders `SyncActivityIndicator` even when nothing changed
+				// (the inconsistent sibling of the store-backed status path).
+				return prev !== null && metricsShallowEqual(prev, next) ? prev : next;
+			});
 		read();
 		const id = setInterval(read, pollMs);
 		return () => clearInterval(id);
@@ -364,6 +464,25 @@ function dedupeRemotePeers(
 	peers: readonly PresenceState[],
 	selfId: string,
 ): readonly PresenceState[] {
+	// F6 — fast path for the common one-tab-per-user room: a single scan
+	// that drops self and detects duplicate logical ids. The awareness
+	// bridge already deduped by transport clientId, so a logical-id
+	// collision (same user in multiple tabs) is rare; only then do we pay
+	// for the merging `Map` below.
+	const out: PresenceState[] = [];
+	const seen = new Set<string>();
+	let collision = false;
+	for (const frame of peers) {
+		if (frame.peer.id === selfId) continue;
+		if (seen.has(frame.peer.id)) {
+			collision = true;
+			break;
+		}
+		seen.add(frame.peer.id);
+		out.push(frame);
+	}
+	if (!collision) return out;
+
 	const byId = new Map<string, PresenceState>();
 	for (const frame of peers) {
 		if (frame.peer.id === selfId) continue;
@@ -379,4 +498,83 @@ function dedupeRemotePeers(
 		});
 	}
 	return Array.from(byId.values());
+}
+
+/**
+ * F2 — shallow value-equality over the fields the presence UI renders
+ * (id/displayName/color, cursor x/y, selection nodeIds). Lets the
+ * `setPeers` updater preserve the previous array reference on no-op
+ * inbound frames so `PeersContext` consumers don't re-render.
+ */
+function peersShallowEqual(
+	a: readonly PresenceState[],
+	b: readonly PresenceState[],
+): boolean {
+	if (a === b) return true;
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		const x = a[i];
+		const y = b[i];
+		if (x === undefined || y === undefined) return false;
+		if (
+			x.peer.id !== y.peer.id ||
+			x.peer.displayName !== y.peer.displayName ||
+			x.peer.color !== y.peer.color
+		) {
+			return false;
+		}
+		if ((x.cursor?.x ?? null) !== (y.cursor?.x ?? null)) return false;
+		if ((x.cursor?.y ?? null) !== (y.cursor?.y ?? null)) return false;
+		const xs = x.selection?.nodeIds;
+		const ys = y.selection?.nodeIds;
+		if ((xs?.length ?? 0) !== (ys?.length ?? 0)) return false;
+		if (xs && ys) {
+			for (let j = 0; j < xs.length; j++) {
+				if (xs[j] !== ys[j]) return false;
+			}
+		}
+	}
+	return true;
+}
+
+/**
+ * F5 — a stable signature over the roster's id/displayName/color so the
+ * provider can reuse the previous identities array reference across
+ * cursor-only frames.
+ */
+function peerIdentitySignature(peers: readonly PresenceState[]): string {
+	// JSON-encode so a user-controlled `displayName` containing the field
+	// separator can't alias two distinct rosters into one signature.
+	const parts: [string, string | null, string | null][] = [];
+	for (const frame of peers) {
+		parts.push([
+			frame.peer.id,
+			frame.peer.displayName ?? null,
+			frame.peer.color ?? null,
+		]);
+	}
+	return JSON.stringify(parts);
+}
+
+/**
+ * F7 — value-equality over a {@link MetricsSnapshot} (flat numbers /
+ * booleans plus the `degradedReasons` string array), so the metrics
+ * poll can preserve the previous reference when nothing changed.
+ */
+function metricsShallowEqual(a: MetricsSnapshot, b: MetricsSnapshot): boolean {
+	const keys = Object.keys(a) as (keyof MetricsSnapshot)[];
+	if (keys.length !== Object.keys(b).length) return false;
+	for (const key of keys) {
+		const av = a[key];
+		const bv = b[key];
+		if (Array.isArray(av) && Array.isArray(bv)) {
+			if (av.length !== bv.length) return false;
+			for (let i = 0; i < av.length; i++) {
+				if (av[i] !== bv[i]) return false;
+			}
+			continue;
+		}
+		if (av !== bv) return false;
+	}
+	return true;
 }
