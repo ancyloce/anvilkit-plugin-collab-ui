@@ -6,7 +6,7 @@ import {
 	type PresenceSelectionRingRect,
 } from "@anvilkit/ui/presence";
 import { motion, useSpring } from "motion/react";
-import { type ReactNode, useEffect } from "react";
+import { memo, type ReactNode, useEffect } from "react";
 
 import { useCollabCursorVisibility, useCollabPeers } from "../context.js";
 import { cn } from "../lib/cn.js";
@@ -74,52 +74,135 @@ export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 	);
 }
 
-function PeerOverlays({
-	frame,
-	showCursors,
-	resolveSelectionRect,
-}: {
+interface PeerOverlaysProps {
 	readonly frame: PresenceState;
 	readonly showCursors: boolean;
 	readonly resolveSelectionRect?: (
 		nodeId: string,
 	) => PresenceSelectionRingRect | null;
-}): ReactNode {
+}
+
+function selectionSignature(frame: PresenceState): string {
+	return frame.selection?.nodeIds?.join("|") ?? "";
+}
+
+function PeerOverlaysImpl({
+	frame,
+	showCursors,
+	resolveSelectionRect,
+}: PeerOverlaysProps): ReactNode {
 	const cursor = frame.cursor;
-	const selection = frame.selection?.nodeIds ?? [];
 	return (
 		<>
 			{showCursors && cursor ? (
 				<RemoteCursor peer={frame.peer} x={cursor.x} y={cursor.y} />
 			) : null}
-			{resolveSelectionRect
-				? selection.map((nodeId) => {
-						const rect = resolveSelectionRect(nodeId);
-						if (!rect) return null;
-						return (
-							<PresenceSelectionRing
-								key={`${frame.peer.id}:${nodeId}`}
-								peer={frame.peer}
-								rect={rect}
-							/>
-						);
-					})
-				: null}
+			{resolveSelectionRect ? (
+				<PeerSelectionRings
+					frame={frame}
+					resolveSelectionRect={resolveSelectionRect}
+				/>
+			) : null}
 		</>
 	);
 }
 
-function RemoteCursor({
-	peer,
-	x,
-	y,
-}: {
+/**
+ * F3 — skip a peer's overlay subtree unless that peer's cursor,
+ * selection, or identity changed. With F2's reference-stable peers array
+ * this makes one peer's move re-render only that peer's overlays instead
+ * of all 50.
+ */
+function comparePeerFrame(
+	prev: PeerOverlaysProps,
+	next: PeerOverlaysProps,
+): boolean {
+	if (
+		prev.showCursors !== next.showCursors ||
+		prev.resolveSelectionRect !== next.resolveSelectionRect
+	) {
+		return false;
+	}
+	const a = prev.frame;
+	const b = next.frame;
+	if (a === b) return true;
+	return (
+		a.peer.id === b.peer.id &&
+		a.peer.color === b.peer.color &&
+		a.peer.displayName === b.peer.displayName &&
+		(a.cursor?.x ?? null) === (b.cursor?.x ?? null) &&
+		(a.cursor?.y ?? null) === (b.cursor?.y ?? null) &&
+		selectionSignature(a) === selectionSignature(b)
+	);
+}
+
+const PeerOverlays = memo(PeerOverlaysImpl, comparePeerFrame);
+
+interface PeerSelectionRingsProps {
+	readonly frame: PresenceState;
+	readonly resolveSelectionRect: (
+		nodeId: string,
+	) => PresenceSelectionRingRect | null;
+}
+
+function PeerSelectionRingsImpl({
+	frame,
+	resolveSelectionRect,
+}: PeerSelectionRingsProps): ReactNode {
+	const selection = frame.selection?.nodeIds ?? [];
+	return (
+		<>
+			{selection.map((nodeId) => {
+				const rect = resolveSelectionRect(nodeId);
+				if (!rect) return null;
+				return (
+					<PresenceSelectionRing
+						key={`${frame.peer.id}:${nodeId}`}
+						peer={frame.peer}
+						rect={rect}
+					/>
+				);
+			})}
+		</>
+	);
+}
+
+/**
+ * F4 — `resolveSelectionRect` reads `getBoundingClientRect()`, so calling
+ * it per selected node every frame forces synchronous layout. Re-render
+ * the rings only when the peer's selection (or color) changes, NOT on
+ * cursor moves. (A ResizeObserver/scroll layout-epoch cache that also
+ * refreshes rects on canvas resize is the documented follow-up.)
+ */
+function compareSelectionRings(
+	prev: PeerSelectionRingsProps,
+	next: PeerSelectionRingsProps,
+): boolean {
+	if (prev.resolveSelectionRect !== next.resolveSelectionRect) return false;
+	const a = prev.frame;
+	const b = next.frame;
+	if (a === b) return true;
+	return (
+		a.peer.id === b.peer.id &&
+		a.peer.color === b.peer.color &&
+		selectionSignature(a) === selectionSignature(b)
+	);
+}
+
+const PeerSelectionRings = memo(PeerSelectionRingsImpl, compareSelectionRings);
+
+interface RemoteCursorProps {
 	readonly peer: PresenceState["peer"];
 	readonly x: number;
 	readonly y: number;
-}): ReactNode {
+}
+
+function RemoteCursorImpl({ peer, x, y }: RemoteCursorProps): ReactNode {
 	const sx = useSpring(x, CURSOR_SPRING);
 	const sy = useSpring(y, CURSOR_SPRING);
+	// Load-bearing: for a plain-number source motion's `useSpring` does not
+	// auto-track, so these `set` calls are the SOLE channel propagating
+	// x/y updates. Removing them freezes every cursor (review Appendix B).
 	useEffect(() => {
 		sx.set(x);
 	}, [sx, x]);
@@ -163,3 +246,24 @@ function RemoteCursor({
 		</motion.div>
 	);
 }
+
+/**
+ * F3 — re-render a cursor only when its position or rendered identity
+ * changes. The parent passes a fresh `peer` object each awareness frame,
+ * so a reference comparison would never skip; compare the rendered
+ * fields instead.
+ */
+function compareCursor(
+	prev: RemoteCursorProps,
+	next: RemoteCursorProps,
+): boolean {
+	return (
+		prev.x === next.x &&
+		prev.y === next.y &&
+		prev.peer.id === next.peer.id &&
+		prev.peer.color === next.peer.color &&
+		prev.peer.displayName === next.peer.displayName
+	);
+}
+
+const RemoteCursor = memo(RemoteCursorImpl, compareCursor);
