@@ -13,16 +13,42 @@ import { type ReactNode, useState } from "react";
 
 import { useCollabAdapter } from "../context.js";
 
+/**
+ * Injectable copy for the force-resync dialog (F14). Defaults are
+ * English; a host localizes by passing overrides (the same injectable-
+ * copy pattern as `ConflictNoticeCenter`'s `formatMessage`). Per the
+ * CLAUDE.md i18n convention, copy is injected — no translations are
+ * bundled here.
+ */
+export interface ForceResyncDialogLabels {
+	readonly title?: string;
+	readonly description?: string;
+	readonly cancel?: string;
+	readonly confirm?: string;
+	readonly confirmBusy?: string;
+}
+
+const DEFAULT_RESYNC_LABELS = {
+	title: "Force resync from latest snapshot?",
+	description:
+		"Your local unsaved edits will be discarded. The latest saved snapshot will replace your view.",
+	cancel: "Cancel",
+	confirm: "Force Resync",
+	confirmBusy: "Resyncing...",
+} as const;
+
 export interface ForceResyncDialogProps {
 	readonly open: boolean;
 	readonly onOpenChange: (open: boolean) => void;
 	readonly onResynced?: () => void;
+	readonly labels?: ForceResyncDialogLabels;
 }
 
 export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
 	const adapter = useCollabAdapter();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const labels = { ...DEFAULT_RESYNC_LABELS, ...props.labels };
 
 	async function handleConfirm(): Promise<void> {
 		setError(null);
@@ -45,11 +71,8 @@ export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
 				showCloseButton={false}
 				className="max-w-md"
 			>
-				<DialogTitle>Force resync from latest snapshot?</DialogTitle>
-				<DialogDescription>
-					Your local unsaved edits will be discarded. The latest saved snapshot
-					will replace your view.
-				</DialogDescription>
+				<DialogTitle>{labels.title}</DialogTitle>
+				<DialogDescription>{labels.description}</DialogDescription>
 				{error !== null ? (
 					<p
 						role="alert"
@@ -63,7 +86,7 @@ export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
 					<DialogClose
 						render={<Button type="button" variant="outline" disabled={busy} />}
 					>
-						Cancel
+						{labels.cancel}
 					</DialogClose>
 					<Button
 						type="button"
@@ -74,7 +97,7 @@ export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
 						disabled={busy}
 						data-testid="force-resync-confirm"
 					>
-						{busy ? "Resyncing..." : "Force Resync"}
+						{busy ? labels.confirmBusy : labels.confirm}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
