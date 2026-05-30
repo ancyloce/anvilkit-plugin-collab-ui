@@ -16,6 +16,7 @@ export {
 } from "./components/conflict-notice-center.js";
 export {
 	ForceResyncDialog,
+	type ForceResyncDialogLabels,
 	type ForceResyncDialogProps,
 } from "./components/force-resync-dialog.js";
 export {
@@ -29,12 +30,14 @@ export {
 export {
 	SyncActivityIndicator,
 	type SyncActivityIndicatorProps,
+	type SyncActivityLabels,
 } from "./components/sync-activity-indicator.js";
 export {
 	type CollabSelf,
 	type CollabUIContextValue,
 	CollabUIProvider,
 	type CollabUIProviderProps,
+	conflictKey,
 	useCollabAdapter,
 	useCollabConflictQueue,
 	useCollabConflicts,
@@ -42,6 +45,7 @@ export {
 	useCollabCursorVisibility,
 	useCollabIdentity,
 	useCollabMetrics,
+	useCollabPeerIdentities,
 	useCollabPeers,
 	useCollabSelf,
 	useCollabStatus,
