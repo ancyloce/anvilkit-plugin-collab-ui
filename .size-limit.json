@@ -2,7 +2,7 @@
 	{
 		"name": "@anvilkit/collab-ui",
 		"path": "dist/index.js",
-		"limit": "50 KB",
+		"limit": "12 KB",
 		"gzip": true,
 		"ignore": [
 			"react",
@@ -13,9 +13,10 @@
 			"@anvilkit/plugin-version-history",
 			"@anvilkit/ui",
 			"@anvilkit/utils",
-			"@base-ui/react",
 			"clsx",
 			"lucide-react",
+			"motion",
+			"motion/react",
 			"sonner",
 			"tailwind-merge"
 		]

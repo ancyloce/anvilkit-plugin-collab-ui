@@ -50,12 +50,20 @@
 		"tag": "next"
 	},
 	"peerDependencies": {
+		"@hocuspocus/provider": "^4.1.0",
 		"@puckeditor/core": "^0.21.2",
 		"react": ">=19.0.0",
-		"react-dom": ">=19.0.0"
+		"react-dom": ">=19.0.0",
+		"y-websocket": "^3.0.0"
 	},
 	"peerDependenciesMeta": {
 		"@puckeditor/core": {
+			"optional": true
+		},
+		"@hocuspocus/provider": {
+			"optional": true
+		},
+		"y-websocket": {
 			"optional": true
 		}
 	},
@@ -89,6 +97,7 @@
 		"@anvilkit/biome-config": "workspace:*",
 		"@anvilkit/typescript-config": "workspace:*",
 		"@anvilkit/vitest-config": "workspace:*",
+		"@hocuspocus/provider": "^4.1.0",
 		"@puckeditor/core": "^0.21.2",
 		"@rsbuild/plugin-react": "^2.0.0",
 		"@rslib/core": "^0.22.0",
@@ -104,6 +113,7 @@
 		"react": "^19.2.6",
 		"react-dom": "^19.2.6",
 		"typescript": "6.0.3",
-		"vitest": "^4.1.7"
+		"vitest": "^4.1.7",
+		"y-websocket": "^3.0.0"
 	}
 }

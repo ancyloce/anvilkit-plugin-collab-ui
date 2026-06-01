@@ -12,30 +12,59 @@ pnpm add @anvilkit/collab-ui @anvilkit/plugin-collab-yjs @anvilkit/core react re
 
 `react` and `react-dom` are non-optional peers. `@puckeditor/core` is an optional peer — only needed if you forward a `puckConfig` for outbound sync. `yjs` and `y-protocols` arrive transitively through `@anvilkit/plugin-collab-yjs`.
 
+**Managed mode needs a provider.** To enable live collaboration with just a `websocketUrl` (see Quickstart), install the matching WebSocket provider — both are **optional peers**, loaded only via dynamic `import()` when you actually connect, so they never weigh down your initial bundle:
+
+```bash
+pnpm add @hocuspocus/provider   # default backend (provider: "hocuspocus")
+# or
+pnpm add y-websocket            # for provider: "y-websocket"
+```
+
+If you set `websocketUrl` without installing the provider, the sync indicator shows a clear `error` status and `onConnectionError` fires — never a cryptic bundler failure.
+
 ## Quickstart
+
+Set **one** value — the WebSocket URL. `room` defaults to `"anvilkit-default-room"`, `provider` to `"hocuspocus"`, `self` to an auto-generated anonymous identity, and the plugin owns the whole transport lifecycle (doc + awareness + provider + status bridge + teardown):
 
 ```tsx
 import { Studio } from "@anvilkit/core";
 import { createCollabPlugin } from "@anvilkit/collab-ui";
-import { Doc as YDoc } from "yjs";
-
-const doc = new YDoc();
 
 export default function EditorPage() {
   return (
     <Studio
       puckConfig={puckConfig}
       plugins={[
-        createCollabPlugin({
-          doc,
-          self: { id: "alice", displayName: "Alice", color: "#f43f5e" },
-          puckConfig,
-        }),
+        createCollabPlugin({ websocketUrl: "ws://localhost:1234", puckConfig }),
       ]}
     />
   );
 }
 ```
+
+Every other field is an optional override:
+
+```tsx
+createCollabPlugin({
+  websocketUrl: "wss://relay.example.com",
+  room: "doc-42",
+  provider: "y-websocket",            // override the Hocuspocus default
+  token: authToken,
+  self: { id: user.id, displayName: user.name, color: user.color },
+  puckConfig,
+  onConnectionError: (err) => toast.error(String(err)),
+});
+```
+
+### Bring your own transport (BYO)
+
+Already managing the `Y.Doc`, `Awareness`, and provider yourself? Pass `doc` (and optionally `awareness` / `connectionSource`) and the factory leaves transport entirely to you — fully backward compatible with pre-`websocketUrl` callers:
+
+```tsx
+createCollabPlugin({ doc, awareness, connectionSource, self, puckConfig });
+```
+
+When both `doc` and `websocketUrl` are set, `doc` (BYO) wins and a one-time dev warning names the ignored field.
 
 The bundled `<PresenceLayer>` and `<ConflictNoticeCenter>` are mounted by the plugin automatically — pass `presence: { enabled: false }` or `notifications: { enabled: false }` to opt out of either. The collaborator avatar stack is always contributed to the core `collaborators` header slot; override it via the host's `collaboratorsSlot` prop on `<Studio>` if you need different chrome.
 
@@ -58,10 +87,15 @@ function createCollabPlugin(options: CreateCollabPluginOptions): StudioPlugin;
 
 | Field                                                                                                               | Type                                                | Default      | Purpose                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `self`                                                                                                              | `PeerInfo`                                          | _required_   | Local peer identity. Mirrored into awareness on mount and on every `updateSelf` call.                                                                |
+| `websocketUrl`                                                                                                      | `string`                                            | none         | **Managed mode.** Relay URL — the only field most hosts set. Omit (with no `doc`) for single-tab in-memory mode (one-time dev warning).              |
+| `room`                                                                                                              | `string`                                            | `"anvilkit-default-room"` | Shared room/document name for managed mode.                                                                                            |
+| `provider`                                                                                                          | `"hocuspocus" \| "y-websocket"`                     | `"hocuspocus"` | Managed-mode backend (install the matching optional peer). Ignored in BYO mode.                                                                   |
+| `token`                                                                                                             | `string`                                            | `""`         | Auth token forwarded to the relay (managed mode).                                                                                                    |
+| `onConnectionError`                                                                                                 | `(err: unknown) => void`                            | `console.error` once | Fires when the managed transport fails (provider missing, bad URL, auth). Never throws from the factory.                                     |
+| `self`                                                                                                              | `PeerInfo`                                          | auto-generated | Local peer identity. When omitted, an anonymous identity (`anon-<uuid>` + stable hashed hex color) is generated.                                  |
 | `onIdentityChange`                                                                                                  | `(next: PeerInfo) => void`                          | none         | Fires when downstream UI calls `updateSelf`. Skipped on initial mount and deduped by shallow equality on `{ id, displayName, color }`.               |
-| `doc`                                                                                                               | `YDoc`                                              | _required_   | Host-owned Yjs document.                                                                                                                             |
-| `awareness`                                                                                                         | `Awareness`                                         | auto-created | Presence channel.                                                                                                                                    |
+| `doc`                                                                                                               | `YDoc`                                              | none         | **BYO mode.** Provide your own Yjs document; the factory neither creates nor destroys it. Takes precedence over `websocketUrl`.                       |
+| `awareness`                                                                                                         | `Awareness`                                         | auto-created | Presence channel. BYO in BYO mode; an optional managed-mode override otherwise.                                                                      |
 | `mapName`, `useNativeTree`, `staleAfterMs`, `connectionSource`, `computeDelta`, `awarenessRateLimit`, `persistence` | —                                                   | —            | Forwarded verbatim to `createYjsAdapter`. See [plugin-collab-yjs `CreateYjsAdapterOptions`](../plugin-collab-yjs/README.md#createyjsadapteroptions). |
 | `puckConfig`                                                                                                        | `Config`                                            | none         | Required for outbound sync. Omit for read-only viewers.                                                                                              |
 | `saveDebounceMs`                                                                                                    | `number`                                            | `150`        | Coalesces local saves. Set `0` to disable.                                                                                                           |
