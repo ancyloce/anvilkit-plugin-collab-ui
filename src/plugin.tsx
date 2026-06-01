@@ -16,7 +16,10 @@
  *      - `providers` — one provider that wraps the Studio tree in
  *        `<CollabUIProvider>` (so `useCollabContext`/`useCollabPeers`/
  *        ... work everywhere the host renders) plus an internal
- *        `<IdentitySync>` side-effect component for `onIdentityChange`.
+ *        `<IdentitySync>` side-effect component for `onIdentityChange`
+ *        and, unless `presence.broadcastCursor` is `false`, a turnkey
+ *        `<PresenceCursorBroadcaster>` so the local cursor is published
+ *        without any host pointer wiring.
  *      - `overlays` — `<PresenceLayer>` at `"canvas"` placement and
  *        `<ConflictNoticeCenter>` at `"notifications"`.
  *      - `slots` — `<PeerAvatarStack>` at the core `"collaborators"`
@@ -47,6 +50,15 @@ import {
 	type ValidateRemoteIR,
 	type ValidationFailure,
 } from "@anvilkit/plugin-collab-yjs";
+import type {
+	ManagedTransport,
+	ManagedTransportProvider,
+} from "@anvilkit/plugin-collab-yjs/transport";
+// Runtime function + types for the plugin-owned managed transport. Imported
+// from the dedicated `/transport` subpath so the provider libs it lazily
+// loads never reach a consumer's initial chunk. No direct `yjs` dependency is
+// added — yjs still arrives transitively through `createYjsAdapter`.
+import { createManagedTransport } from "@anvilkit/plugin-collab-yjs/transport";
 import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import type { Config as PuckConfig } from "@puckeditor/core";
 import { UsersRound } from "lucide-react";
@@ -71,11 +83,13 @@ import {
 	type ConflictNoticeCenterProps,
 } from "./components/conflict-notice-center.js";
 import { PeerAvatarStack } from "./components/peer-avatar-stack.js";
+import { PresenceCursorBroadcaster } from "./components/presence-cursor-broadcaster.js";
 import {
 	type CollabPresenceLayerProps,
 	PresenceLayer,
 } from "./components/presence-layer.js";
 import { CollabUIProvider, useCollabSelf } from "./context.js";
+import { makeAnonSelf } from "./lib/anon-identity.js";
 
 /**
  * Options for {@link createCollabPlugin}.
@@ -85,12 +99,16 @@ import { CollabUIProvider, useCollabSelf } from "./context.js";
  * contributions on top of those primitives.
  */
 export interface CreateCollabPluginOptions {
-	// ── Identity (host-owned) ─────────────────────────────────────────
+	// ── Identity ──────────────────────────────────────────────────────
 	/**
 	 * The local peer's identity. Mirrored into awareness on mount and
 	 * whenever a downstream consumer calls `updateSelf` on the context.
+	 *
+	 * Optional: when omitted, an anonymous identity is generated
+	 * (`anon-<uuid>` id + a stable hashed color) so "just give me
+	 * collaboration" needs neither a `doc` nor a `self`.
 	 */
-	readonly self: PeerInfo;
+	readonly self?: PeerInfo;
 
 	/**
 	 * Optional callback fired whenever the local peer's identity
@@ -105,15 +123,48 @@ export interface CreateCollabPluginOptions {
 	 */
 	readonly onIdentityChange?: (next: PeerInfo) => void;
 
-	// ── Transport (host-owned, forwarded to createYjsAdapter) ────────
+	// ── Managed transport (plugin-owned) ─────────────────────────────
 	/**
-	 * Host-owned `Y.Doc`. The factory does not create or destroy it;
-	 * the host controls transport (in-memory, y-websocket, Hocuspocus,
-	 * etc.).
+	 * WebSocket relay URL, e.g. `ws://localhost:1234`. The **one field most
+	 * hosts set.** Provide it (and omit `doc`) to let the plugin own the
+	 * whole transport lifecycle — doc, awareness, provider, status bridge,
+	 * and teardown. Omit both `websocketUrl` and `doc` for single-tab
+	 * in-memory mode (a one-time dev warning fires).
 	 */
-	readonly doc: YDoc;
+	readonly websocketUrl?: string;
 	/**
-	 * Optional `Awareness` instance for presence + cursor sync.
+	 * Shared room/document name for managed mode. Default
+	 * `"anvilkit-default-room"` so two tabs collaborate out of the box.
+	 */
+	readonly room?: string;
+	/**
+	 * Managed-mode backend. Default `"hocuspocus"`. Ignored in BYO mode.
+	 */
+	readonly provider?: ManagedTransportProvider;
+	/**
+	 * Auth token forwarded to the relay (managed mode). Default `""`.
+	 */
+	readonly token?: string;
+	/**
+	 * Called when the managed transport fails (provider lib not installed,
+	 * bad URL, auth failure). Defaults to a single `console.error`. Never
+	 * throws from the factory.
+	 */
+	readonly onConnectionError?: (err: unknown) => void;
+
+	// ── BYO transport (host-owned, forwarded to createYjsAdapter) ────
+	/**
+	 * Host-owned `Y.Doc`. Provide it to opt into **BYO transport mode** —
+	 * the factory neither creates nor destroys it and honors your
+	 * `awareness`/`connectionSource`. When omitted, the plugin builds and
+	 * owns the transport (see `websocketUrl`). Takes precedence over
+	 * `websocketUrl` when both are set.
+	 */
+	readonly doc?: YDoc;
+	/**
+	 * `Awareness` instance for presence + cursor sync. In BYO mode this is
+	 * the host's; in managed mode it is an optional override the transport
+	 * reuses instead of minting its own.
 	 */
 	readonly awareness?: Awareness;
 	/**
@@ -199,8 +250,18 @@ export interface CreateCollabPluginOptions {
 	 * peers from `<CollabUIProvider>` context, so only visual / cursor
 	 * options need to be specified here. Pass `enabled: false` to skip
 	 * mounting the layer entirely (e.g. read-only embeds).
+	 *
+	 * `broadcastCursor` (default `true`) additionally mounts a turnkey
+	 * local-cursor publisher so the zero-config one-liner shows peers'
+	 * cursors out of the box — no host pointer plumbing required. Set it
+	 * `false` if you run your own presence writer (e.g. one that also
+	 * broadcasts the Puck selection): awareness *replaces* the local frame
+	 * on every update, so two writers would clobber each other.
 	 */
-	readonly presence?: CollabPresenceLayerProps & { readonly enabled?: boolean };
+	readonly presence?: CollabPresenceLayerProps & {
+		readonly enabled?: boolean;
+		readonly broadcastCursor?: boolean;
+	};
 	/**
 	 * Props forwarded to `<ConflictNoticeCenter>`. Pass
 	 * `enabled: false` to skip the toaster.
@@ -254,6 +315,102 @@ function peerInfoEquals(a: PeerInfo, b: PeerInfo): boolean {
 	);
 }
 
+/** Transport primitives for `createYjsAdapter`, plus the owned transport (if
+ * any) to dispose on destroy. */
+interface ResolvedTransport {
+	readonly doc: YDoc;
+	readonly awareness: Awareness | undefined;
+	readonly connectionSource: CreateYjsAdapterOptions["connectionSource"];
+	readonly ownTransport: ManagedTransport | undefined;
+}
+
+/**
+ * §3.4 resolution ladder. `doc` → BYO (today's path, untouched); else
+ * `websocketUrl` → managed; else in-memory. Conflicting combinations resolve
+ * by this precedence and emit a one-time dev warning naming the ignored field.
+ */
+function resolveTransport(
+	options: CreateCollabPluginOptions,
+	warn: (message: string) => void,
+): ResolvedTransport {
+	if (options.doc) {
+		if (options.websocketUrl) {
+			warn(
+				"`websocketUrl` ignored because `doc` was provided (BYO transport mode).",
+			);
+		}
+		return {
+			doc: options.doc,
+			awareness: options.awareness,
+			connectionSource: options.connectionSource,
+			ownTransport: undefined,
+		};
+	}
+
+	// Plugin owns the transport: managed (with `websocketUrl`) or in-memory.
+	if (!options.websocketUrl) {
+		warn(
+			"no `websocketUrl` or `doc` provided — running single-tab in-memory; edits will not sync. Set `websocketUrl` to enable live collaboration.",
+		);
+	}
+	if (options.connectionSource) {
+		warn(
+			"host `connectionSource` ignored in managed/in-memory mode; the plugin owns the transport.",
+		);
+	}
+	const ownTransport = createManagedTransport({
+		websocketUrl: options.websocketUrl,
+		room: options.room,
+		provider: options.provider,
+		token: options.token,
+		awareness: options.awareness,
+		onConnectionError: options.onConnectionError,
+	});
+	return {
+		doc: ownTransport.doc,
+		awareness: ownTransport.awareness,
+		connectionSource: ownTransport.connectionSource,
+		ownTransport,
+	};
+}
+
+type CollabRegistrationHooks = NonNullable<StudioPluginRegistration["hooks"]>;
+
+/**
+ * Fold an owned transport's `destroy()` into the data plugin's `onDestroy`
+ * chain so a `<Studio>` remount never leaks the WebSocket/doc/awareness.
+ */
+function composeTransportTeardown(
+	hooks: StudioPluginRegistration["hooks"],
+	transport: ManagedTransport,
+): CollabRegistrationHooks {
+	const baseOnDestroy = hooks?.onDestroy;
+	return {
+		...hooks,
+		onDestroy: async (ctx) => {
+			try {
+				await baseOnDestroy?.(ctx);
+			} finally {
+				transport.destroy();
+			}
+		},
+	};
+}
+
+/**
+ * Make a per-plugin-instance one-time warner. Keyed by message and scoped to a
+ * single `createCollabPlugin` call (NOT process-global), so a second plugin
+ * instance with the same misconfiguration still surfaces its own warning.
+ */
+function createWarnOnce(): (message: string) => void {
+	const seen = new Set<string>();
+	return (message) => {
+		if (seen.has(message)) return;
+		seen.add(message);
+		console.warn(`[anvilkit/collab] createCollabPlugin: ${message}`);
+	};
+}
+
 /**
  * Build a single {@link StudioPlugin} that delivers both yjs data sync
  * *and* the collab UI (presence cursors, conflict toasts, collaborator
@@ -267,18 +424,13 @@ function peerInfoEquals(a: PeerInfo, b: PeerInfo): boolean {
  * @example
  * ```tsx
  * import { createCollabPlugin } from "@anvilkit/collab-ui";
- * import { Doc as YDoc } from "yjs";
  *
- * const doc = new YDoc();
+ * // The one-liner: set only the relay URL. `room` → "anvilkit-default-room",
+ * // `provider` → "hocuspocus", `self` → an auto-generated anonymous identity,
+ * // and the whole transport lifecycle is owned by the plugin.
  * <Studio
- *   plugins={[
- *     createCollabPlugin({
- *       doc,
- *       self: { id: "alice", displayName: "Alice", color: "#f43f5e" },
- *       puckConfig: myConfig,
- *     }),
- *   ]}
- *   puckConfig={myConfig}
+ *   plugins={[createCollabPlugin({ websocketUrl: "ws://localhost:1234", puckConfig })]}
+ *   puckConfig={puckConfig}
  * />
  * ```
  */
@@ -286,14 +438,10 @@ export function createCollabPlugin(
 	options: CreateCollabPluginOptions,
 ): StudioPlugin {
 	const {
-		self,
 		onIdentityChange,
-		doc,
-		awareness,
 		mapName,
 		useNativeTree,
 		staleAfterMs,
-		connectionSource,
 		computeDelta,
 		awarenessRateLimit,
 		persistence,
@@ -308,86 +456,123 @@ export function createCollabPlugin(
 		notifications: notificationsOpts,
 	} = options;
 
-	// Build the adapter. The host's `Y.Doc` outlives the adapter; the
-	// adapter cleans up its own listeners via the data plugin's
-	// `onDestroy`.
-	const adapter = createYjsAdapter({
-		doc,
-		awareness,
-		peer: self,
-		mapName,
-		useNativeTree,
-		staleAfterMs,
-		connectionSource,
-		computeDelta,
-		awarenessRateLimit,
-		persistence,
-	});
-
-	// P2 — coalesce keystroke-rate local saves by default. Only the
-	// data plugin's save path is wrapped; presence/status/conflict
-	// reads below stay on the live `adapter`. `saveDebounceMs: 0`
-	// opts out for hosts that debounce upstream.
-	const saveAdapter =
-		saveDebounceMs === 0
-			? adapter
-			: createDebouncedAdapter(adapter, { ms: saveDebounceMs ?? 150 });
-
-	const dataPlugin = createCollabDataPlugin({
-		adapter: saveAdapter,
-		puckConfig,
-		localPeer: self,
-		validateRemoteIR,
-		onValidationFailure,
-		policy,
-		onPolicyViolation,
-		onSaveError,
-	} satisfies CreateDataPluginOptions);
-
-	// Bound UI components — closures over the factory options so each
-	// render produces a fresh subtree (provider/overlay/slot contracts
-	// require `ComponentType`, not `ReactNode`).
-	const ProviderComponent = ({
-		children,
-	}: {
-		readonly children: ReactNode;
-	}): ReactNode => (
-		<CollabUIProvider adapter={adapter} self={self}>
-			<IdentitySync onIdentityChange={onIdentityChange} />
-			{children}
-		</CollabUIProvider>
-	);
-
-	const PresenceOverlay = (): ReactNode => {
-		const { enabled: _e, ...rest } = presenceOpts ?? {};
-		return <PresenceLayer {...rest} />;
-	};
-
-	const ConflictOverlay = (): ReactNode => {
-		const { enabled: _e, ...rest } = notificationsOpts ?? {};
-		return <ConflictNoticeCenter {...rest} />;
-	};
-
-	// Collaborator avatar stack for the core `"collaborators"` header
-	// slot. Reads peers/identity from `<CollabUIProvider>` (contributed
-	// above), which wraps the whole Studio tree — chrome included — so
-	// the stack resolves its context inside `<StudioHeader>`.
-	const CollaboratorsSlot = (): ReactNode => <PeerAvatarStack />;
-
+	// Resolved once per plugin instance, stable across Studio recompiles:
+	// identity (auto-generated anon peer when `self` is omitted, so enabling
+	// collaboration needs neither a `doc` nor a `self`), the one-time warner,
+	// and the UI-enable flags (which depend only on options).
+	const self = options.self ?? makeAnonSelf();
+	const warnOnce = createWarnOnce();
 	const presenceEnabled = presenceOpts?.enabled !== false;
+	// Mount the turnkey local-cursor publisher unless presence is disabled or
+	// the host opted out (because it runs its own combined cursor+selection
+	// writer). Default on so `createCollabPlugin({ websocketUrl })` shows
+	// remote cursors with no extra wiring.
+	const broadcastCursorEnabled =
+		presenceEnabled && presenceOpts?.broadcastCursor !== false;
 	const notificationsEnabled = notificationsOpts?.enabled !== false;
 
 	return {
 		meta: META,
 		async register(ctx) {
+			// Build the transport + adapter FRESH on every register() — NOT once
+			// in the factory body. A Studio recompile fires `onDestroy` (which,
+			// in managed/in-memory mode, disposes the owned transport's
+			// doc/awareness/provider) and then re-calls register() on the SAME
+			// plugin object. Rebuilding here means the new registration runs over
+			// a live doc instead of re-registering an adapter on a destroyed one
+			// (managed-mode silent-death fix).
+			//
+			// §3.4 resolution ladder — BYO `doc` → managed `websocketUrl` →
+			// in-memory. In the latter two the plugin owns `ownTransport`.
+			const { doc, awareness, connectionSource, ownTransport } =
+				resolveTransport(options, warnOnce);
+
+			const adapter = createYjsAdapter({
+				doc,
+				awareness,
+				peer: self,
+				mapName,
+				useNativeTree,
+				staleAfterMs,
+				connectionSource,
+				computeDelta,
+				awarenessRateLimit,
+				persistence,
+			});
+
+			// P2 — coalesce keystroke-rate local saves by default. Only the data
+			// plugin's save path is wrapped; presence/status/conflict reads below
+			// stay on the live `adapter`. `saveDebounceMs: 0` opts out.
+			const saveAdapter =
+				saveDebounceMs === 0
+					? adapter
+					: createDebouncedAdapter(adapter, { ms: saveDebounceMs ?? 150 });
+
+			const dataPlugin = createCollabDataPlugin({
+				adapter: saveAdapter,
+				puckConfig,
+				localPeer: self,
+				validateRemoteIR,
+				onValidationFailure,
+				policy,
+				onPolicyViolation,
+				onSaveError,
+			} satisfies CreateDataPluginOptions);
+
 			const dataRegistration = await dataPlugin.register(ctx);
 			ctx.log("debug", `${PACKAGE_NAME}: createCollabPlugin registered`, {
 				adapterStatus: adapter.getStatus().kind,
 			});
 
+			// Bound UI components close over THIS register's `adapter` and the
+			// stable `self` (provider/overlay/slot contracts require
+			// `ComponentType`, not `ReactNode`).
+			const ProviderComponent = ({
+				children,
+			}: {
+				readonly children: ReactNode;
+			}): ReactNode => (
+				<CollabUIProvider adapter={adapter} self={self}>
+					<IdentitySync onIdentityChange={onIdentityChange} />
+					{broadcastCursorEnabled ? <PresenceCursorBroadcaster /> : null}
+					{children}
+				</CollabUIProvider>
+			);
+
+			const PresenceOverlay = (): ReactNode => {
+				const {
+					enabled: _e,
+					broadcastCursor: _b,
+					...rest
+				} = presenceOpts ?? {};
+				// When the factory owns cursor broadcasting (the one-liner path),
+				// the published coordinates are viewport-relative, so pin the layer
+				// to the viewport by default — unless the host positions it itself.
+				const className =
+					rest.className ??
+					(broadcastCursorEnabled ? "!fixed z-[9999]" : undefined);
+				return <PresenceLayer {...rest} className={className} />;
+			};
+
+			const ConflictOverlay = (): ReactNode => {
+				const { enabled: _e, ...rest } = notificationsOpts ?? {};
+				return <ConflictNoticeCenter {...rest} />;
+			};
+
+			// Collaborator avatar stack for the core `"collaborators"` header
+			// slot. Reads peers/identity from `<CollabUIProvider>` (contributed
+			// above), which wraps the whole Studio tree — chrome included — so
+			// the stack resolves its context inside `<StudioHeader>`.
+			const CollaboratorsSlot = (): ReactNode => <PeerAvatarStack />;
+
 			const registration: StudioPluginRegistration = {
 				meta: META,
-				hooks: dataRegistration.hooks,
+				// When the plugin owns the transport (managed/in-memory), fold its
+				// teardown into the data plugin's `onDestroy` so a remount never
+				// leaks a WebSocket/doc/awareness. BYO mode is untouched.
+				hooks: ownTransport
+					? composeTransportTeardown(dataRegistration.hooks, ownTransport)
+					: dataRegistration.hooks,
 				providers: [
 					{
 						id: "collab-ui",

@@ -79,6 +79,28 @@ vi.mock("@anvilkit/plugin-collab-yjs", () => {
 	};
 });
 
+// Track managed-transport construction/teardown without a real socket.
+const transportRef = vi.hoisted(() => ({
+	created: 0,
+	destroyed: 0,
+	lastOptions: null as Record<string, unknown> | null,
+}));
+
+vi.mock("@anvilkit/plugin-collab-yjs/transport", () => ({
+	createManagedTransport: vi.fn((opts: Record<string, unknown>) => {
+		transportRef.created += 1;
+		transportRef.lastOptions = opts;
+		return {
+			doc: {},
+			awareness: undefined,
+			connectionSource: () => () => undefined,
+			destroy: () => {
+				transportRef.destroyed += 1;
+			},
+		};
+	}),
+}));
+
 // Import AFTER the mock is registered.
 import { useCollabContext } from "../context.js";
 import { createCollabPlugin } from "../plugin.js";
@@ -107,6 +129,9 @@ const FAKE_DOC = {} as never;
 beforeEach(() => {
 	const { adapter } = createFakeAdapter();
 	adapterRef.current = adapter;
+	transportRef.created = 0;
+	transportRef.destroyed = 0;
+	transportRef.lastOptions = null;
 });
 
 describe("createCollabPlugin — plugin shape", () => {
@@ -252,5 +277,66 @@ describe("createCollabPlugin — runtime behavior", () => {
 			capturedUpdateSelf?.({ displayName: "Alice v3" });
 		});
 		expect(onIdentityChange).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("createCollabPlugin — transport resolution (PRD 0001)", () => {
+	it("BYO mode (doc provided) does not construct a managed transport", async () => {
+		const plugin = createCollabPlugin({ doc: FAKE_DOC, self: ALICE });
+		const registration = await plugin.register(makeCtx());
+		expect(transportRef.created).toBe(0);
+		// onDestroy is the data plugin's own, with no transport teardown folded in.
+		await registration.hooks?.onDestroy?.(makeCtx() as never);
+		expect(transportRef.destroyed).toBe(0);
+	});
+
+	it("managed mode (websocketUrl) constructs a transport and tears it down on destroy", async () => {
+		const plugin = createCollabPlugin({
+			websocketUrl: "ws://localhost:1234",
+			room: "doc-42",
+			provider: "y-websocket",
+		});
+		const registration = await plugin.register(makeCtx());
+		expect(transportRef.created).toBe(1);
+		expect(transportRef.lastOptions).toMatchObject({
+			websocketUrl: "ws://localhost:1234",
+			room: "doc-42",
+			provider: "y-websocket",
+		});
+		expect(transportRef.destroyed).toBe(0);
+		await registration.hooks?.onDestroy?.(makeCtx() as never);
+		expect(transportRef.destroyed).toBe(1);
+	});
+
+	it("in-memory mode (neither doc nor websocketUrl) warns and still owns a transport", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		try {
+			const plugin = createCollabPlugin({});
+			const registration = await plugin.register(makeCtx());
+			expect(transportRef.created).toBe(1);
+			expect(transportRef.lastOptions).toMatchObject({
+				websocketUrl: undefined,
+			});
+			expect(warn).toHaveBeenCalled();
+			await registration.hooks?.onDestroy?.(makeCtx() as never);
+			expect(transportRef.destroyed).toBe(1);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("rebuilds the transport on re-register so a Studio recompile survives (F1 regression)", async () => {
+		const plugin = createCollabPlugin({ websocketUrl: "ws://localhost:1234" });
+		const reg1 = await plugin.register(makeCtx());
+		expect(transportRef.created).toBe(1);
+		await reg1.hooks?.onDestroy?.(makeCtx() as never);
+		expect(transportRef.destroyed).toBe(1);
+		// Re-registering on the SAME plugin object (what the core controller
+		// does on a config-only recompile) must build a FRESH transport, never
+		// re-register an adapter over the destroyed one.
+		const reg2 = await plugin.register(makeCtx());
+		expect(transportRef.created).toBe(2);
+		await reg2.hooks?.onDestroy?.(makeCtx() as never);
+		expect(transportRef.destroyed).toBe(2);
 	});
 });
