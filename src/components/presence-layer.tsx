@@ -5,7 +5,13 @@ import {
 	PresenceSelectionRing,
 	type PresenceSelectionRingRect,
 } from "@anvilkit/ui/presence";
-import { motion, useReducedMotion, useSpring } from "motion/react";
+import {
+	domAnimation,
+	LazyMotion,
+	m,
+	useReducedMotion,
+	useSpring,
+} from "motion/react";
 import { memo, type ReactNode, useEffect } from "react";
 
 import { useCollabCursorVisibility, useCollabPeers } from "../context.js";
@@ -54,23 +60,25 @@ export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 	const { showRemoteCursors } = useCollabCursorVisibility();
 	const showCursors = props.showCursors ?? showRemoteCursors;
 	return (
-		<div
-			data-slot="presence-layer"
-			aria-hidden="true"
-			className={cn(
-				"pointer-events-none absolute inset-0 overflow-hidden",
-				props.className,
-			)}
-		>
-			{peers.map((frame) => (
-				<PeerOverlays
-					key={frame.peer.id}
-					frame={frame}
-					showCursors={showCursors}
-					resolveSelectionRect={props.resolveSelectionRect}
-				/>
-			))}
-		</div>
+		<LazyMotion features={domAnimation}>
+			<div
+				data-slot="presence-layer"
+				aria-hidden="true"
+				className={cn(
+					"pointer-events-none absolute inset-0 overflow-hidden",
+					props.className,
+				)}
+			>
+				{peers.map((frame) => (
+					<PeerOverlays
+						key={frame.peer.id}
+						frame={frame}
+						showCursors={showCursors}
+						resolveSelectionRect={props.resolveSelectionRect}
+					/>
+				))}
+			</div>
+		</LazyMotion>
 	);
 }
 
@@ -217,7 +225,7 @@ function RemoteCursorImpl({ peer, x, y }: RemoteCursorProps): ReactNode {
 	}, [sy, y, shouldReduceMotion]);
 	const color = peer.color ?? DEFAULT_COLOR;
 	return (
-		<motion.div
+		<m.div
 			data-slot="presence-cursor"
 			data-peer-id={peer.id}
 			aria-hidden="true"
@@ -249,7 +257,7 @@ function RemoteCursorImpl({ peer, x, y }: RemoteCursorProps): ReactNode {
 					{peer.displayName}
 				</span>
 			) : null}
-		</motion.div>
+		</m.div>
 	);
 }
 
