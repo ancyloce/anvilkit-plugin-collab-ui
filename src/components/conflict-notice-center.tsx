@@ -42,24 +42,27 @@ export function ConflictNoticeCenter(
 	// to re-walk the whole conflict queue on every render.
 	const formatterRef = useRef(formatter);
 	formatterRef.current = formatter;
-	const seenRef = useRef<Set<string>>(new Set());
+	// Lazy init: a nullable ref so the `Set` is allocated once on first
+	// effect run, not rebuilt as a throwaway on every render.
+	const seenRef = useRef<Set<string> | null>(null);
 	const [resyncOpen, setResyncOpen] = useState(false);
 
 	useEffect(() => {
+		const seen = (seenRef.current ??= new Set<string>());
 		for (const event of conflicts) {
 			// Composite key (not the bare ISO `at`): two overlap conflicts
 			// can share a timestamp in one tick. Used as the toast id AND
 			// the dismiss key so dismissing one never drops its
 			// co-timestamped sibling unacknowledged (M1 / review §C6).
 			const key = conflictKey(event);
-			if (seenRef.current.has(key)) continue;
-			seenRef.current.add(key);
+			if (seen.has(key)) continue;
+			seen.add(key);
 			// M6 — FIFO-bound the seen set (insertion-ordered, so the first
 			// entry is the oldest) to keep it from growing for the whole
 			// component lifetime.
-			if (seenRef.current.size > MAX_SEEN) {
-				const oldest = seenRef.current.values().next().value;
-				if (oldest !== undefined) seenRef.current.delete(oldest);
+			if (seen.size > MAX_SEEN) {
+				const oldest = seen.values().next().value;
+				if (oldest !== undefined) seen.delete(oldest);
 			}
 			toast(formatterRef.current(event), {
 				id: key,
