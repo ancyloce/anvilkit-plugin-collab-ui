@@ -4,7 +4,8 @@ import type { ConflictEvent } from "@anvilkit/plugin-collab-yjs";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 
-import { conflictKey, useCollabConflictQueue } from "../context.js";
+import { useCollabConflictQueue } from "../context.js";
+import { conflictKey } from "../lib/conflict-key.js";
 import { ForceResyncDialog } from "./force-resync-dialog.js";
 
 export interface ConflictNoticeCenterProps {
