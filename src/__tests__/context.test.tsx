@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
 	CollabUIProvider,
-	conflictKey,
 	useCollabConflictQueue,
 	useCollabConflicts,
 	useCollabContext,
@@ -12,6 +11,7 @@ import {
 	useCollabPeers,
 	useCollabStatus,
 } from "../context.js";
+import { conflictKey } from "../lib/conflict-key.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 describe("CollabUIProvider", () => {
