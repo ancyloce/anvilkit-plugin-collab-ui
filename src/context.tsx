@@ -500,25 +500,27 @@ function dedupeRemotePeers(
 	const seen = new Set<string>();
 	let collision = false;
 	for (const frame of peers) {
-		if (frame.peer.id === selfId) continue;
-		if (seen.has(frame.peer.id)) {
+		const { id } = frame.peer;
+		if (id === selfId) continue;
+		if (seen.has(id)) {
 			collision = true;
 			break;
 		}
-		seen.add(frame.peer.id);
+		seen.add(id);
 		out.push(frame);
 	}
 	if (!collision) return out;
 
 	const byId = new Map<string, PresenceState>();
 	for (const frame of peers) {
-		if (frame.peer.id === selfId) continue;
-		const prev = byId.get(frame.peer.id);
+		const { id } = frame.peer;
+		if (id === selfId) continue;
+		const prev = byId.get(id);
 		if (!prev) {
-			byId.set(frame.peer.id, frame);
+			byId.set(id, frame);
 			continue;
 		}
-		byId.set(frame.peer.id, {
+		byId.set(id, {
 			peer: { ...prev.peer, ...frame.peer },
 			cursor: frame.cursor ?? prev.cursor,
 			selection: frame.selection ?? prev.selection,
