@@ -46,10 +46,9 @@ export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 	}
 
 	return (
-		<div
-			className={cn("flex items-center", props.className)}
+		<ul
+			className={cn("flex items-center list-none m-0 p-0", props.className)}
 			data-slot="peer-avatar-stack"
-			role="list"
 			aria-label={`${collaborators.length} ${
 				collaborators.length === 1 ? "collaborator" : "collaborators"
 			} connected`}
@@ -61,7 +60,7 @@ export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 			>
 				{items}
 			</AvatarGroup>
-		</div>
+		</ul>
 	);
 }
 
