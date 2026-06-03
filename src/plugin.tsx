@@ -63,7 +63,7 @@ import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import type { Config as PuckConfig } from "@puckeditor/core";
 import { UsersRound } from "lucide-react";
 import type { ReactNode } from "react";
-import { createElement, useEffect, useRef } from "react";
+import { createElement } from "react";
 
 import config from "../meta/config.json";
 import packageJson from "../package.json";
@@ -78,18 +78,15 @@ import packageJson from "../package.json";
 type YDoc = CreateYjsAdapterOptions["doc"];
 type Awareness = NonNullable<CreateYjsAdapterOptions["awareness"]>;
 
-import {
-	ConflictNoticeCenter,
-	type ConflictNoticeCenterProps,
-} from "./components/conflict-notice-center.js";
+import type { ConflictNoticeCenterProps } from "./components/conflict-notice-center.js";
 import { PeerAvatarStack } from "./components/peer-avatar-stack.js";
 import { PresenceCursorBroadcaster } from "./components/presence-cursor-broadcaster.js";
-import {
-	type CollabPresenceLayerProps,
-	PresenceLayer,
-} from "./components/presence-layer.js";
-import { CollabUIProvider, useCollabSelf } from "./context.js";
+import type { CollabPresenceLayerProps } from "./components/presence-layer.js";
+import { createConflictOverlay } from "./conflict-overlay.js";
+import { CollabUIProvider } from "./context.js";
+import { IdentitySync } from "./identity-sync.js";
 import { makeAnonSelf } from "./lib/anon-identity.js";
+import { createPresenceOverlay } from "./presence-overlay.js";
 
 /**
  * Options for {@link createCollabPlugin}.
@@ -280,40 +277,6 @@ const META: StudioPluginMeta = {
 	version: packageJson.version,
 	icon: createElement(UsersRound),
 };
-
-/**
- * Internal side-effect component that bridges `useCollabSelf()` changes
- * back to the host's `onIdentityChange` callback. Renders `null` and
- * only exists for the `useEffect`.
- *
- * Contract: fires **only** when the identity actually changes after
- * mount. The host already knows the initial value (they passed it in
- * via `self`), and `<CollabUIProvider>` re-creates the `self` object
- * reference on its sync effect even when the content is identical —
- * the dedupe avoids echoing those phantom updates back to the host.
- */
-function IdentitySync({
-	onIdentityChange,
-}: {
-	readonly onIdentityChange?: (next: PeerInfo) => void;
-}): null {
-	const self = useCollabSelf();
-	const previousRef = useRef<PeerInfo | undefined>(undefined);
-	useEffect(() => {
-		const previous = previousRef.current;
-		previousRef.current = self;
-		if (previous === undefined) return; // skip initial render
-		if (peerInfoEquals(previous, self)) return; // skip no-op updates
-		onIdentityChange?.(self);
-	}, [self, onIdentityChange]);
-	return null;
-}
-
-function peerInfoEquals(a: PeerInfo, b: PeerInfo): boolean {
-	return (
-		a.id === b.id && a.displayName === b.displayName && a.color === b.color
-	);
-}
 
 /** Transport primitives for `createYjsAdapter`, plus the owned transport (if
  * any) to dispose on destroy. */
@@ -539,32 +502,6 @@ export function createCollabPlugin(
 				</CollabUIProvider>
 			);
 
-			const PresenceOverlay = (): ReactNode => {
-				const {
-					enabled: _e,
-					broadcastCursor: _b,
-					...rest
-				} = presenceOpts ?? {};
-				// When the factory owns cursor broadcasting (the one-liner path),
-				// the published coordinates are viewport-relative, so pin the layer
-				// to the viewport by default — unless the host positions it itself.
-				const className =
-					rest.className ??
-					(broadcastCursorEnabled ? "!fixed z-[9999]" : undefined);
-				return <PresenceLayer {...rest} className={className} />;
-			};
-
-			const ConflictOverlay = (): ReactNode => {
-				const { enabled: _e, ...rest } = notificationsOpts ?? {};
-				return <ConflictNoticeCenter {...rest} />;
-			};
-
-			// Collaborator avatar stack for the core `"collaborators"` header
-			// slot. Reads peers/identity from `<CollabUIProvider>` (contributed
-			// above), which wraps the whole Studio tree — chrome included — so
-			// the stack resolves its context inside `<StudioHeader>`.
-			const CollaboratorsSlot = (): ReactNode => <PeerAvatarStack />;
-
 			const registration: StudioPluginRegistration = {
 				meta: META,
 				// When the plugin owns the transport (managed/in-memory), fold its
@@ -585,7 +522,10 @@ export function createCollabPlugin(
 								{
 									id: "collab-presence",
 									placement: "canvas" as const,
-									component: PresenceOverlay,
+									component: createPresenceOverlay(
+										presenceOpts,
+										broadcastCursorEnabled,
+									),
 								},
 							] as const)
 						: []),
@@ -594,15 +534,20 @@ export function createCollabPlugin(
 								{
 									id: "collab-conflicts",
 									placement: "notifications" as const,
-									component: ConflictOverlay,
+									component: createConflictOverlay(notificationsOpts),
 								},
 							] as const)
 						: []),
 				],
+				// Collaborator avatar stack for the core `"collaborators"` header
+				// slot. `<PeerAvatarStack>` reads peers/identity from
+				// `<CollabUIProvider>` (contributed above), which wraps the whole
+				// Studio tree — chrome included — so it resolves its context inside
+				// `<StudioHeader>`.
 				slots: [
 					{
 						id: "collaborators",
-						component: CollaboratorsSlot,
+						component: PeerAvatarStack,
 					},
 				],
 			};

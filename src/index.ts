@@ -37,7 +37,6 @@ export {
 	type CollabUIContextValue,
 	CollabUIProvider,
 	type CollabUIProviderProps,
-	conflictKey,
 	useCollabAdapter,
 	useCollabConflictQueue,
 	useCollabConflicts,
@@ -50,6 +49,7 @@ export {
 	useCollabSelf,
 	useCollabStatus,
 } from "./context.js";
+export { conflictKey } from "./lib/conflict-key.js";
 export {
 	type CreateCollabPluginOptions,
 	createCollabPlugin,
