@@ -185,12 +185,53 @@ function normalizeColor(
 
 export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	const { adapter, children, self: selfProp } = props;
-	const [self, setSelfState] = useState<PeerInfo>(selfProp);
+	// `self` is the host's `selfProp` plus any local override applied via
+	// `updateSelf` (the settings popover). The override is tagged with the
+	// `selfProp` signature it was taken under, so a host identity change makes
+	// it stale and `self` derives back to `selfProp` — the same reset the old
+	// prop→state effect performed, without copying a prop into state.
+	const [selfOverride, setSelfOverride] = useState<{
+		readonly sig: string;
+		readonly displayName?: string;
+		readonly color?: string;
+	} | null>(null);
 	const [peers, setPeers] = useState<readonly PresenceState[]>([]);
 	const [conflicts, setConflicts] = useState<readonly ConflictEvent[]>([]);
 	const [showRemoteCursors, setShowRemoteCursors] = useState(true);
+
+	// Collision-proof tuple key (mirrors `conflictKey` /
+	// `peerIdentitySignature`): a separator char in a host id/displayName
+	// must not alias two distinct identities into the same signature.
+	const selfPropSig = JSON.stringify([
+		selfProp.id,
+		selfProp.displayName,
+		selfProp.color,
+	]);
+	const self = useMemo<PeerInfo>(() => {
+		const valid = selfOverride !== null && selfOverride.sig === selfPropSig;
+		return {
+			id: selfProp.id,
+			displayName:
+				valid && selfOverride.displayName !== undefined
+					? selfOverride.displayName
+					: selfProp.displayName,
+			color:
+				valid && selfOverride.color !== undefined
+					? selfOverride.color
+					: selfProp.color,
+		};
+	}, [
+		selfProp.id,
+		selfProp.displayName,
+		selfProp.color,
+		selfPropSig,
+		selfOverride,
+	]);
+
 	const selfRef = useRef(self);
 	selfRef.current = self;
+	const selfPropSigRef = useRef(selfPropSig);
+	selfPropSigRef.current = selfPropSig;
 
 	const status = useExternalStatus(adapter);
 
@@ -207,14 +248,6 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		identitiesRef.current = peers.map((frame) => frame.peer);
 	}
 	const peerIdentities = identitiesRef.current;
-
-	useEffect(() => {
-		setSelfState({
-			id: selfProp.id,
-			displayName: selfProp.displayName,
-			color: selfProp.color,
-		});
-	}, [selfProp.id, selfProp.displayName, selfProp.color]);
 
 	useEffect(() => {
 		const unsub = adapter.onConflict((event) => {
@@ -268,16 +301,17 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	}, []);
 
 	const updateSelf = useCallback((patch: Partial<CollabSelf>) => {
-		setSelfState((prev) => {
-			const next: PeerInfo = {
-				id: prev.id,
-				displayName: patch.displayName ?? prev.displayName,
-				color:
-					patch.color !== undefined
-						? normalizeColor(patch.color, prev.color)
-						: prev.color,
-			};
-			return next;
+		// Snapshot the current effective identity, apply the patch, and tag it
+		// with the live `selfProp` signature so a later host identity change
+		// evicts this override (see the `self` derivation above).
+		const current = selfRef.current;
+		setSelfOverride({
+			sig: selfPropSigRef.current,
+			displayName: patch.displayName ?? current.displayName,
+			color:
+				patch.color !== undefined
+					? normalizeColor(patch.color, current.color)
+					: current.color,
 		});
 	}, []);
 

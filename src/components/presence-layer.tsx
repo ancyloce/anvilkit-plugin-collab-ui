@@ -5,7 +5,7 @@ import {
 	PresenceSelectionRing,
 	type PresenceSelectionRingRect,
 } from "@anvilkit/ui/presence";
-import { motion, useSpring } from "motion/react";
+import { motion, useReducedMotion, useSpring } from "motion/react";
 import { memo, type ReactNode, useEffect } from "react";
 
 import { useCollabCursorVisibility, useCollabPeers } from "../context.js";
@@ -198,17 +198,23 @@ interface RemoteCursorProps {
 }
 
 function RemoteCursorImpl({ peer, x, y }: RemoteCursorProps): ReactNode {
+	// WCAG 2.3.3 — honor the OS "reduce motion" setting: snap the cursor to
+	// each new position (`jump`) instead of spring-interpolating it (`set`)
+	// so the looping pointer motion doesn't play for users who opted out.
+	const shouldReduceMotion = useReducedMotion();
 	const sx = useSpring(x, CURSOR_SPRING);
 	const sy = useSpring(y, CURSOR_SPRING);
 	// Load-bearing: for a plain-number source motion's `useSpring` does not
-	// auto-track, so these `set` calls are the SOLE channel propagating
+	// auto-track, so these `set`/`jump` calls are the SOLE channel propagating
 	// x/y updates. Removing them freezes every cursor (review Appendix B).
 	useEffect(() => {
-		sx.set(x);
-	}, [sx, x]);
+		if (shouldReduceMotion) sx.jump(x);
+		else sx.set(x);
+	}, [sx, x, shouldReduceMotion]);
 	useEffect(() => {
-		sy.set(y);
-	}, [sy, y]);
+		if (shouldReduceMotion) sy.jump(y);
+		else sy.set(y);
+	}, [sy, y, shouldReduceMotion]);
 	const color = peer.color ?? DEFAULT_COLOR;
 	return (
 		<motion.div
