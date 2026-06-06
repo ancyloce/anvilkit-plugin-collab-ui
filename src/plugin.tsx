@@ -84,6 +84,7 @@ import { PresenceCursorBroadcaster } from "./components/presence-cursor-broadcas
 import type { CollabPresenceLayerProps } from "./components/presence-layer.js";
 import { createConflictOverlay } from "./conflict-overlay.js";
 import { CollabUIProvider } from "./context.js";
+import { COLLAB_UI_ENTRY } from "./i18n/entry.js";
 import { IdentitySync } from "./identity-sync.js";
 import { makeAnonSelf } from "./lib/anon-identity.js";
 import { createPresenceOverlay } from "./presence-overlay.js";
@@ -437,6 +438,12 @@ export function createCollabPlugin(
 	return {
 		meta: META,
 		async register(ctx) {
+			// Contribute the `collabUi` message catalog so presence chrome,
+			// status, conflict, and settings UI resolve `useMsg("collabUi.*")`
+			// in-chrome. Component `labels`/`formatStatus`/`formatMessage` props
+			// still override per-mount; this just localizes the defaults.
+			ctx.registerMessages(COLLAB_UI_ENTRY);
+
 			// Build the transport + adapter FRESH on every register() — NOT once
 			// in the factory body. A Studio recompile fires `onDestroy` (which,
 			// in managed/in-memory mode, disposes the owned transport's

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMsg } from "@anvilkit/core/i18n";
 import type { ConflictEvent } from "@anvilkit/plugin-collab-yjs";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -7,6 +8,9 @@ import { Toaster, toast } from "sonner";
 import { useCollabConflictQueue } from "../context.js";
 import { conflictKey } from "../lib/conflict-key.js";
 import { ForceResyncDialog } from "./force-resync-dialog.js";
+
+/** The `useMsg()` resolver shape, threaded into the default formatter. */
+type Msg = (key: string, fallback?: string) => string;
 
 export interface ConflictNoticeCenterProps {
 	/**
@@ -18,12 +22,19 @@ export interface ConflictNoticeCenterProps {
 	readonly toasterPosition?: "top-right" | "bottom-right" | "top-center";
 }
 
-const DEFAULT_FORMAT = (event: ConflictEvent): string => {
+// Default conflict copy now resolves from the shared `collabUi.*` catalog
+// (localizable via the active locale); a host still overrides per-mount with
+// `formatMessage`.
+function defaultFormat(event: ConflictEvent, msg: Msg): string {
 	const peerName =
-		event.remotePeer?.displayName ?? event.remotePeer?.id ?? "another peer";
+		event.remotePeer?.displayName ??
+		event.remotePeer?.id ??
+		msg("collabUi.conflict.anotherPeer");
 	const nodeList = event.nodeIds.slice(0, 3).join(", ");
-	return `${peerName}'s edit overlapped your unsaved change in ${nodeList}.`;
-};
+	return msg("collabUi.conflict.message")
+		.replace("{peer}", peerName)
+		.replace("{nodes}", nodeList);
+}
 
 /**
  * M6 — FIFO cap on the per-component `seen` set so dedupe state can't
@@ -36,13 +47,20 @@ const MAX_SEEN = 512;
 export function ConflictNoticeCenter(
 	props: ConflictNoticeCenterProps,
 ): ReactNode {
+	const msg = useMsg();
 	const { conflicts, dismissConflict } = useCollabConflictQueue();
-	const formatter = props.formatMessage ?? DEFAULT_FORMAT;
+	const formatter =
+		props.formatMessage ??
+		((event: ConflictEvent) => defaultFormat(event, msg));
 	// M6 — keep the latest formatter in a ref so an inline host
 	// `formatMessage` (new identity each render) does not force the effect
-	// to re-walk the whole conflict queue on every render.
+	// to re-walk the whole conflict queue on every render. The `msg` resolver
+	// rides along in the same ref so the toast action label stays current
+	// across a locale switch without re-running the effect.
 	const formatterRef = useRef(formatter);
 	formatterRef.current = formatter;
+	const msgRef = useRef(msg);
+	msgRef.current = msg;
 	// Lazy init: a nullable ref so the `Set` is allocated once on first
 	// effect run, not rebuilt as a throwaway on every render.
 	const seenRef = useRef<Set<string> | null>(null);
@@ -69,7 +87,7 @@ export function ConflictNoticeCenter(
 				id: key,
 				duration: 8000,
 				action: {
-					label: "Force resync",
+					label: msgRef.current("collabUi.conflict.forceResync"),
 					onClick: () => setResyncOpen(true),
 				},
 				onDismiss: () => dismissConflict(key),

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMsg } from "@anvilkit/core/i18n";
 import type { ConnectionStatus } from "@anvilkit/plugin-collab-yjs";
 import {
 	Popover,
@@ -10,6 +11,9 @@ import {
 import { type ReactNode, useId } from "react";
 import { useCollabMetrics, useCollabStatus } from "../context.js";
 import { cn } from "../lib/cn.js";
+
+/** The `useMsg()` resolver shape, threaded into the standalone formatters. */
+type Msg = (key: string, fallback?: string) => string;
 
 // Semantic tokens only (review §B3). The theme defines no `warning`
 // token, so non-terminal states fall back to `muted-foreground`;
@@ -23,27 +27,33 @@ const DOT_CLASS: Record<ConnectionStatus["kind"], string> = {
 	error: "bg-destructive",
 };
 
-function statusLabel(status: ConnectionStatus): string {
+function statusLabel(status: ConnectionStatus, msg: Msg): string {
 	switch (status.kind) {
 		case "connecting":
-			return "Connecting…";
+			return msg("collabUi.sync.connecting");
 		case "synced":
-			return "Synced";
+			return msg("collabUi.sync.synced");
 		case "offline":
-			return `Offline · ${status.queuedEdits} queued`;
+			return msg("collabUi.sync.offline").replace(
+				"{queued}",
+				String(status.queuedEdits),
+			);
 		case "reconnecting":
-			return `Reconnecting (try ${status.attempt})`;
+			return msg("collabUi.sync.reconnecting").replace(
+				"{attempt}",
+				String(status.attempt),
+			);
 		case "error":
-			return "Sync error";
+			return msg("collabUi.sync.error");
 	}
 }
 
 /**
  * Injectable copy for the sync activity panel's static term labels (F14).
- * Defaults are English; a host localizes by passing overrides. The status
- * line itself (with its interpolation) is overridden via `formatStatus`.
- * Per the CLAUDE.md i18n convention, copy is injected — no translations
- * are bundled here.
+ * Defaults now resolve from the shared `collabUi.*` catalog (localizable via
+ * the active locale); a host still overrides per-mount by passing `labels`.
+ * The status line itself (with its interpolation) is overridden via
+ * `formatStatus`.
  */
 export interface SyncActivityLabels {
 	readonly latencyP95?: string;
@@ -58,18 +68,20 @@ export interface SyncActivityLabels {
 	readonly lastPeer?: string;
 }
 
-const DEFAULT_SYNC_LABELS = {
-	latencyP95: "Latency p95",
-	mode: "Mode",
-	degraded: "Degraded",
-	presenceErrors: "Presence errors",
-	queuedEdits: "Queued edits",
-	syncedSince: "Synced since",
-	backoff: "Backoff",
-	reason: "Reason",
-	lastSync: "Last sync",
-	lastPeer: "Last peer",
-} as const;
+function buildDefaultSyncLabels(msg: Msg): Required<SyncActivityLabels> {
+	return {
+		latencyP95: msg("collabUi.sync.latencyP95"),
+		mode: msg("collabUi.sync.mode"),
+		degraded: msg("collabUi.sync.degraded"),
+		presenceErrors: msg("collabUi.sync.presenceErrors"),
+		queuedEdits: msg("collabUi.sync.queuedEdits"),
+		syncedSince: msg("collabUi.sync.syncedSince"),
+		backoff: msg("collabUi.sync.backoff"),
+		reason: msg("collabUi.sync.reason"),
+		lastSync: msg("collabUi.sync.lastSync"),
+		lastPeer: msg("collabUi.sync.lastPeer"),
+	};
+}
 
 export interface SyncActivityIndicatorProps {
 	readonly className?: string;
@@ -84,6 +96,7 @@ export interface SyncActivityIndicatorProps {
 export function SyncActivityIndicator(
 	props: SyncActivityIndicatorProps,
 ): ReactNode {
+	const msg = useMsg();
 	const status = useCollabStatus();
 	const metrics = useCollabMetrics();
 	const popoverId = useId();
@@ -91,9 +104,10 @@ export function SyncActivityIndicator(
 	// adapter metrics (review §C5 / §4.5).
 	const latencyMs = props.latencyMs ?? metrics?.syncLatencyP95Ms ?? undefined;
 	const validationFailures = metrics?.presenceValidationFailures ?? 0;
-	// F14 — injectable copy with English defaults.
-	const renderStatus = props.formatStatus ?? statusLabel;
-	const labels = { ...DEFAULT_SYNC_LABELS, ...props.labels };
+	// F14 — injectable copy; defaults resolve from the `collabUi.*` catalog.
+	const renderStatus =
+		props.formatStatus ?? ((s: ConnectionStatus) => statusLabel(s, msg));
+	const labels = { ...buildDefaultSyncLabels(msg), ...props.labels };
 	return (
 		<Popover>
 			<PopoverTrigger

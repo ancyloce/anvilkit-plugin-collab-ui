@@ -1,5 +1,6 @@
 "use client";
 
+import { useMsg } from "@anvilkit/core/i18n";
 import { Button } from "@anvilkit/ui/button";
 import {
 	Popover,
@@ -32,6 +33,7 @@ export interface CollabSettingsPopoverProps {
 export function CollabSettingsPopover(
 	props: CollabSettingsPopoverProps,
 ): ReactNode {
+	const msg = useMsg();
 	const { self, updateSelf } = useCollabIdentity();
 	const { showRemoteCursors, setShowRemoteCursors } =
 		useCollabCursorVisibility();
@@ -65,7 +67,7 @@ export function CollabSettingsPopover(
 						type="button"
 						variant="ghost"
 						size="icon"
-						aria-label="Collaboration settings"
+						aria-label={msg("collabUi.settings.trigger")}
 						className={props.className}
 					/>
 				}
@@ -78,10 +80,14 @@ export function CollabSettingsPopover(
 				sideOffset={6}
 				className="w-72"
 			>
-				<PopoverTitle className="font-medium">Collaboration</PopoverTitle>
+				<PopoverTitle className="font-medium">
+					{msg("collabUi.settings.title")}
+				</PopoverTitle>
 				<FieldGroup className="mt-3">
 					<Field>
-						<FieldLabel htmlFor={nameId}>Display name</FieldLabel>
+						<FieldLabel htmlFor={nameId}>
+							{msg("collabUi.settings.displayName")}
+						</FieldLabel>
 						<Input
 							id={nameId}
 							type="text"
@@ -90,7 +96,9 @@ export function CollabSettingsPopover(
 						/>
 					</Field>
 					<Field>
-						<FieldLabel htmlFor={colorId}>Peer color</FieldLabel>
+						<FieldLabel htmlFor={colorId}>
+							{msg("collabUi.settings.peerColor")}
+						</FieldLabel>
 						<Input
 							id={colorId}
 							type="color"
@@ -100,7 +108,9 @@ export function CollabSettingsPopover(
 						/>
 					</Field>
 					<Field orientation="horizontal">
-						<FieldLabel id={cursorsId}>Show remote cursors</FieldLabel>
+						<FieldLabel id={cursorsId}>
+							{msg("collabUi.settings.showCursors")}
+						</FieldLabel>
 						<Switch
 							aria-labelledby={cursorsId}
 							checked={showRemoteCursors}
@@ -110,7 +120,7 @@ export function CollabSettingsPopover(
 					</Field>
 					{props.roomId !== undefined ? (
 						<Field>
-							<FieldLabel>Room</FieldLabel>
+							<FieldLabel>{msg("collabUi.settings.room")}</FieldLabel>
 							<div className="flex items-center gap-2">
 								<Input
 									type="text"
@@ -120,7 +130,7 @@ export function CollabSettingsPopover(
 								/>
 								<CopyButton
 									content={linkToCopy || props.roomId}
-									aria-label="Copy room link"
+									aria-label={msg("collabUi.settings.copyLink")}
 									variant="outline"
 									size="sm"
 								/>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMsg } from "@anvilkit/core/i18n";
 import { Button } from "@anvilkit/ui/button";
 import {
 	Dialog,
@@ -14,11 +15,10 @@ import { type ReactNode, useState } from "react";
 import { useCollabAdapter } from "../context.js";
 
 /**
- * Injectable copy for the force-resync dialog (F14). Defaults are
- * English; a host localizes by passing overrides (the same injectable-
- * copy pattern as `ConflictNoticeCenter`'s `formatMessage`). Per the
- * CLAUDE.md i18n convention, copy is injected — no translations are
- * bundled here.
+ * Injectable copy for the force-resync dialog (F14). Defaults now resolve
+ * from the shared `collabUi.*` catalog (localizable via the active locale);
+ * a host still overrides per-mount by passing `labels` (the same injectable-
+ * copy pattern as `ConflictNoticeCenter`'s `formatMessage`).
  */
 export interface ForceResyncDialogLabels {
 	readonly title?: string;
@@ -28,15 +28,6 @@ export interface ForceResyncDialogLabels {
 	readonly confirmBusy?: string;
 }
 
-const DEFAULT_RESYNC_LABELS = {
-	title: "Force resync from latest snapshot?",
-	description:
-		"Your local unsaved edits will be discarded. The latest saved snapshot will replace your view.",
-	cancel: "Cancel",
-	confirm: "Force Resync",
-	confirmBusy: "Resyncing...",
-} as const;
-
 export interface ForceResyncDialogProps {
 	readonly open: boolean;
 	readonly onOpenChange: (open: boolean) => void;
@@ -45,10 +36,18 @@ export interface ForceResyncDialogProps {
 }
 
 export function ForceResyncDialog(props: ForceResyncDialogProps): ReactNode {
+	const msg = useMsg();
 	const adapter = useCollabAdapter();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const labels = { ...DEFAULT_RESYNC_LABELS, ...props.labels };
+	const labels = {
+		title: msg("collabUi.resync.title"),
+		description: msg("collabUi.resync.description"),
+		cancel: msg("collabUi.resync.cancel"),
+		confirm: msg("collabUi.resync.confirm"),
+		confirmBusy: msg("collabUi.resync.confirmBusy"),
+		...props.labels,
+	};
 
 	async function handleConfirm(): Promise<void> {
 		setError(null);

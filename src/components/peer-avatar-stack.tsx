@@ -1,5 +1,6 @@
 "use client";
 
+import { useMsg } from "@anvilkit/core/i18n";
 import type { PeerInfo } from "@anvilkit/plugin-version-history";
 import { Avatar, AvatarFallback } from "@anvilkit/ui/avatar";
 import {
@@ -28,6 +29,7 @@ export interface PeerAvatarStackProps {
  * `CollabUIProvider.updateSelf` (review §B4).
  */
 export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
+	const msg = useMsg();
 	const self = useCollabSelf();
 	// F5 — read the roster-only identities slice (id/displayName/color),
 	// not the full presence frames, so the stack does not re-render on
