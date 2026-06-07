@@ -16,6 +16,10 @@ import { Settings } from "lucide-react";
 import { type ChangeEvent, type ReactNode, useId } from "react";
 
 import { useCollabCursorVisibility, useCollabIdentity } from "../context.js";
+import { resolveDisplayName } from "../lib/anon-identity.js";
+import { normalizeHexColor } from "../lib/color.js";
+
+const DEFAULT_PEER_COLOR = "#3b82f6";
 
 export interface CollabSettingsPopoverProps {
 	readonly className?: string;
@@ -91,7 +95,10 @@ export function CollabSettingsPopover(
 						<Input
 							id={nameId}
 							type="text"
-							value={self.displayName ?? self.id}
+							value={
+								resolveDisplayName(self, msg("collabUi.identity.anonymous")) ??
+								self.id
+							}
 							onChange={handleNameChange}
 						/>
 					</Field>
@@ -102,7 +109,7 @@ export function CollabSettingsPopover(
 						<Input
 							id={colorId}
 							type="color"
-							value={normalizeHexColor(self.color)}
+							value={normalizeHexColor(self.color, DEFAULT_PEER_COLOR)}
 							onChange={handleColorChange}
 							className="h-8 w-16 cursor-pointer p-1"
 						/>
@@ -141,10 +148,4 @@ export function CollabSettingsPopover(
 			</PopoverPanel>
 		</Popover>
 	);
-}
-
-function normalizeHexColor(input: string | undefined): string {
-	if (!input) return "#3b82f6";
-	if (input.startsWith("#")) return input;
-	return "#3b82f6";
 }

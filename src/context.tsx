@@ -19,6 +19,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 
+import { normalizeHexColor } from "./lib/color.js";
 import { conflictKey } from "./lib/conflict-key.js";
 
 export interface CollabSelf {
@@ -141,26 +142,6 @@ function useExternalStatus(adapter: YjsSnapshotAdapter): ConnectionStatus {
 		[],
 	);
 	return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-/**
- * Normalize a peer color before it enters local state / awareness.
- * Remote peer colors are already sanitized upstream by
- * `validatePeerInfo` / `validatePresenceState` in
- * `@anvilkit/plugin-collab-yjs` (review §B4/§B5); this guards the
- * **local** edit path so an invalid value from the settings popover
- * never reaches `adapter.presence.update`.
- */
-function normalizeColor(
-	input: string | undefined,
-	fallback: string | undefined,
-): string | undefined {
-	if (typeof input !== "string") return fallback;
-	const value = input.trim();
-	if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)) {
-		return value;
-	}
-	return fallback;
 }
 
 export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
@@ -288,9 +269,13 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		setSelfOverride({
 			sig: selfPropSigRef.current,
 			displayName: patch.displayName ?? current.displayName,
+			// Guard the local edit path so an invalid value from the settings
+			// popover never reaches `adapter.presence.update` (review §B4/U4).
+			// Remote peer colors are already sanitized upstream by
+			// `validatePeerInfo` / `validatePresenceState` in the yjs adapter.
 			color:
 				patch.color !== undefined
-					? normalizeColor(patch.color, current.color)
+					? normalizeHexColor(patch.color, current.color)
 					: current.color,
 		});
 	}, []);

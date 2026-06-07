@@ -63,7 +63,12 @@ export function CollabPresencePublisher(
 				selection: selectionRef.current ?? undefined,
 			});
 		};
-		const onMove = (event: PointerEvent): void => {
+		// `target` is a `Window | HTMLElement` union, so its `addEventListener`
+		// overload widens the listener to `EventListener` ((e: Event) => void).
+		// Typing the handler as `Event` and narrowing with `instanceof MouseEvent`
+		// (PointerEvent extends MouseEvent) keeps the wiring cast-free (review U6).
+		const onMove = (event: Event): void => {
+			if (!(event instanceof MouseEvent)) return;
 			if (root) {
 				const rect = root.getBoundingClientRect();
 				pending = {
@@ -77,11 +82,9 @@ export function CollabPresencePublisher(
 				frame = requestAnimationFrame(flush);
 			}
 		};
-		target.addEventListener("pointermove", onMove as EventListener, {
-			passive: true,
-		});
+		target.addEventListener("pointermove", onMove, { passive: true });
 		return () => {
-			target.removeEventListener("pointermove", onMove as EventListener);
+			target.removeEventListener("pointermove", onMove);
 			if (frame !== 0) cancelAnimationFrame(frame);
 		};
 	}, [adapter, enabled, props.root, self]);

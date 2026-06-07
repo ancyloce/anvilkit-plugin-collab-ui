@@ -10,6 +10,7 @@ import {
 import { memo, type ReactElement, type ReactNode } from "react";
 
 import { useCollabPeerIdentities, useCollabSelf } from "../context.js";
+import { resolveDisplayName } from "../lib/anon-identity.js";
 import { cn } from "../lib/cn.js";
 
 export interface PeerAvatarStackProps {
@@ -75,13 +76,17 @@ const PeerAvatar = memo(function PeerAvatar({
 }: {
 	peer: PeerInfo;
 }): ReactNode {
-	const initials = (peer.displayName ?? peer.id)
+	const msg = useMsg();
+	// U3 — localize the auto-generated anonymous label per viewer, so a zh
+	// collaborator sees "匿名" where an en one sees "Anonymous" for the same peer.
+	const label =
+		resolveDisplayName(peer, msg("collabUi.identity.anonymous")) ?? peer.id;
+	const initials = label
 		.split(/\s+/)
 		.map((part) => part.charAt(0).toUpperCase())
 		.slice(0, 2)
 		.join("");
 	const background = peer.color ?? "var(--muted)";
-	const label = peer.displayName ?? peer.id;
 	return (
 		<Avatar
 			role="listitem"

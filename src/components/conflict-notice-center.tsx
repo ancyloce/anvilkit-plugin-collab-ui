@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 
 import { useCollabConflictQueue } from "../context.js";
+import { resolveDisplayName } from "../lib/anon-identity.js";
 import { conflictKey } from "../lib/conflict-key.js";
 import { ForceResyncDialog } from "./force-resync-dialog.js";
 
@@ -26,9 +27,14 @@ export interface ConflictNoticeCenterProps {
 // (localizable via the active locale); a host still overrides per-mount with
 // `formatMessage`.
 function defaultFormat(event: ConflictEvent, msg: Msg): string {
+	const remotePeer = event.remotePeer;
+	// U3 — localize an auto-generated anonymous peer's name in the toast too,
+	// falling back to its id and then the generic "another peer" label.
 	const peerName =
-		event.remotePeer?.displayName ??
-		event.remotePeer?.id ??
+		(remotePeer
+			? resolveDisplayName(remotePeer, msg("collabUi.identity.anonymous"))
+			: undefined) ??
+		remotePeer?.id ??
 		msg("collabUi.conflict.anotherPeer");
 	const nodeList = event.nodeIds.slice(0, 3).join(", ");
 	return msg("collabUi.conflict.message")
