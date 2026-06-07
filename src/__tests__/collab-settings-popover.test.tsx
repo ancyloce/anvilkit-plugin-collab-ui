@@ -1,17 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
 import { CollabSettingsPopover } from "../components/collab-settings-popover.js";
 import { CollabUIProvider } from "../context.js";
+import { CollabUII18nProvider } from "../i18n/provider.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 describe("<CollabSettingsPopover />", () => {
 	it("renders the trigger with an accessible label", () => {
 		const { adapter } = createFakeAdapter();
 		const { container } = render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<CollabSettingsPopover roomId="demo" />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<CollabSettingsPopover roomId="demo" />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 		const trigger = container.querySelector(
 			"[data-slot=collab-settings-trigger]",
@@ -25,12 +27,14 @@ describe("<CollabSettingsPopover />", () => {
 		const { adapter } = createFakeAdapter();
 		const onShowRemoteCursorsChange = vi.fn();
 		render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<CollabSettingsPopover
-					roomId="demo"
-					onShowRemoteCursorsChange={onShowRemoteCursorsChange}
-				/>
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<CollabSettingsPopover
+						roomId="demo"
+						onShowRemoteCursorsChange={onShowRemoteCursorsChange}
+					/>
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		fireEvent.click(screen.getByLabelText("Collaboration settings"));

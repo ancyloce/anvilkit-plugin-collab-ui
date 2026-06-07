@@ -2,6 +2,7 @@ import { act, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ConflictNoticeCenter } from "../components/conflict-notice-center.js";
 import { CollabUIProvider } from "../context.js";
+import { CollabUII18nProvider } from "../i18n/provider.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 vi.mock("sonner", async () => {
@@ -26,9 +27,11 @@ describe("<ConflictNoticeCenter />", () => {
 		const { adapter } = createFakeAdapter();
 		expect(() =>
 			render(
-				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-					<ConflictNoticeCenter />
-				</CollabUIProvider>,
+				<CollabUII18nProvider>
+					<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+						<ConflictNoticeCenter />
+					</CollabUIProvider>
+				</CollabUII18nProvider>,
 			),
 		).not.toThrow();
 	});
@@ -37,9 +40,11 @@ describe("<ConflictNoticeCenter />", () => {
 		const { toast } = await import("sonner");
 		const { adapter, controls } = createFakeAdapter();
 		render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<ConflictNoticeCenter />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<ConflictNoticeCenter />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		await act(async () =>
@@ -67,9 +72,11 @@ describe("<ConflictNoticeCenter />", () => {
 		toastFn.mockClear();
 		const { adapter, controls } = createFakeAdapter();
 		render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<ConflictNoticeCenter />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<ConflictNoticeCenter />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		// Two overlap conflicts in the same tick share an `at` timestamp but

@@ -3,18 +3,21 @@ import { describe, expect, it } from "vitest";
 
 import { PeerAvatarStack } from "../components/peer-avatar-stack.js";
 import { CollabUIProvider } from "../context.js";
+import { CollabUII18nProvider } from "../i18n/provider.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 describe("<PeerAvatarStack />", () => {
 	it("renders the local collaborator when no remote peers are present", () => {
 		const { adapter } = createFakeAdapter();
 		const { container } = render(
-			<CollabUIProvider
-				adapter={adapter}
-				self={{ id: "alice", displayName: "Alice" }}
-			>
-				<PeerAvatarStack />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider
+					adapter={adapter}
+					self={{ id: "alice", displayName: "Alice" }}
+				>
+					<PeerAvatarStack />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 		const stack = container.querySelector(
 			"[data-slot=peer-avatar-stack]",
@@ -29,9 +32,11 @@ describe("<PeerAvatarStack />", () => {
 	it("shows up to maxVisible avatars, then a +N overflow chip", () => {
 		const { adapter, controls } = createFakeAdapter();
 		const { container } = render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<PeerAvatarStack maxVisible={3} />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<PeerAvatarStack maxVisible={3} />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		act(() =>

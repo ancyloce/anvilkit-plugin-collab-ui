@@ -2,15 +2,18 @@ import { act, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SyncActivityIndicator } from "../components/sync-activity-indicator.js";
 import { CollabUIProvider } from "../context.js";
+import { CollabUII18nProvider } from "../i18n/provider.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 describe("<SyncActivityIndicator />", () => {
 	it("renders the connecting label by default", () => {
 		const { adapter } = createFakeAdapter();
 		const { getByTestId } = render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<SyncActivityIndicator />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<SyncActivityIndicator />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 		expect(getByTestId("sync-activity-indicator-label").textContent).toBe(
 			"Connecting…",
@@ -20,9 +23,11 @@ describe("<SyncActivityIndicator />", () => {
 	it("updates the label as the adapter status changes", () => {
 		const { adapter, controls } = createFakeAdapter();
 		const { getByTestId } = render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<SyncActivityIndicator />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<SyncActivityIndicator />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		act(() => controls.emitStatus({ kind: "synced", since: "now" }));

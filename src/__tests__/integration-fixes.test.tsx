@@ -19,6 +19,7 @@ import {
 	useCollabCursorVisibility,
 	useCollabStatus,
 } from "../context.js";
+import { CollabUII18nProvider } from "../i18n/provider.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 vi.mock("sonner", () => {
@@ -37,11 +38,13 @@ describe("P1-1 · cursor-visibility wired end-to-end (review §C3)", () => {
 	it("context drives the bundled PresenceLayer; props.showCursors overrides", async () => {
 		const { adapter, controls } = createFakeAdapter();
 		const { container } = render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<ToggleCursors />
-				<PresenceLayer />
-				<PresenceLayer showCursors />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<ToggleCursors />
+					<PresenceLayer />
+					<PresenceLayer showCursors />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		await act(async () =>
@@ -78,9 +81,11 @@ describe("P1-4 · conflict dedupe key (review §C6)", () => {
 		(toast as unknown as ReturnType<typeof vi.fn>).mockClear();
 		const { adapter, controls } = createFakeAdapter();
 		render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<ConflictNoticeCenter />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<ConflictNoticeCenter />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		const at = "2026-05-17T00:00:00.000Z";
@@ -143,9 +148,11 @@ describe("P2-4 · metrics surfaced in SyncActivityIndicator (review §C5)", () =
 		(adapter as { metrics: () => MetricsSnapshot }).metrics = () => metrics;
 
 		const { container, findByTestId } = render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<SyncActivityIndicator />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<SyncActivityIndicator />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 
 		const trigger = container.querySelector(
@@ -173,9 +180,11 @@ describe("P2-2 · split context isolates re-renders (review §C2)", () => {
 		}
 		const { adapter, controls } = createFakeAdapter();
 		render(
-			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-				<StatusProbe />
-			</CollabUIProvider>,
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<StatusProbe />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
 		);
 		await waitFor(() => expect(renders.count).toBeGreaterThan(0));
 		const baseline = renders.count;

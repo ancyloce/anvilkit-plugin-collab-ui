@@ -49,6 +49,7 @@ export {
 	useCollabSelf,
 	useCollabStatus,
 } from "./context.js";
+export { CollabUII18nProvider } from "./i18n/provider.js";
 export { conflictKey } from "./lib/conflict-key.js";
 export {
 	type CreateCollabPluginOptions,

@@ -2,6 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ForceResyncDialog } from "../components/force-resync-dialog.js";
 import { CollabUIProvider } from "../context.js";
+import { CollabUII18nProvider } from "../i18n/provider.js";
 import { createFakeAdapter } from "./test-utils.js";
 
 function Harness({
@@ -15,13 +16,15 @@ function Harness({
 }) {
 	const { adapter } = createFakeAdapter();
 	return (
-		<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
-			<ForceResyncDialog
-				open={open}
-				onOpenChange={onOpenChange}
-				onResynced={onResynced}
-			/>
-		</CollabUIProvider>
+		<CollabUII18nProvider>
+			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+				<ForceResyncDialog
+					open={open}
+					onOpenChange={onOpenChange}
+					onResynced={onResynced}
+				/>
+			</CollabUIProvider>
+		</CollabUII18nProvider>
 	);
 }
 

@@ -51,9 +51,10 @@ export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 		<ul
 			className={cn("flex items-center list-none m-0 p-0", props.className)}
 			data-slot="peer-avatar-stack"
-			aria-label={`${collaborators.length} ${
-				collaborators.length === 1 ? "collaborator" : "collaborators"
-			} connected`}
+			aria-label={(collaborators.length === 1
+				? msg("collabUi.peers.connectedOne")
+				: msg("collabUi.peers.connectedMany")
+			).replace("{count}", String(collaborators.length))}
 		>
 			<AvatarGroup
 				className="flex -space-x-2 h-7"
@@ -111,11 +112,12 @@ const PeerAvatar = memo(function PeerAvatar({
 });
 
 function OverflowAvatar({ count }: { count: number }): ReactNode {
+	const msg = useMsg();
 	return (
 		<Avatar
 			size="sm"
 			className="ring-2 ring-background"
-			aria-label={`${count} more`}
+			aria-label={msg("collabUi.peers.more").replace("{count}", String(count))}
 		>
 			<AvatarFallback className="text-[10px] font-medium text-muted-foreground">
 				+{count}
