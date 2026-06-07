@@ -1,5 +1,6 @@
 "use client";
 
+import { useMsg } from "@anvilkit/core/i18n";
 import type { PresenceState } from "@anvilkit/plugin-version-history";
 import {
 	PresenceSelectionRing,
@@ -12,10 +13,24 @@ import {
 	useReducedMotion,
 	useSpring,
 } from "motion/react";
-import { memo, type ReactNode, useEffect } from "react";
+import {
+	memo,
+	type ReactNode,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 
 import { useCollabCursorVisibility, useCollabPeers } from "../context.js";
+import { resolveDisplayName } from "../lib/anon-identity.js";
 import { cn } from "../lib/cn.js";
+import {
+	type CursorBudgetState,
+	createCursorBudgetState,
+	DEFAULT_MAX_CURSORS,
+	selectCursorPeers,
+} from "../lib/cursor-budget.js";
 
 export interface CollabPresenceLayerProps {
 	/**
@@ -29,6 +44,15 @@ export interface CollabPresenceLayerProps {
 		nodeId: string,
 	) => PresenceSelectionRingRect | null;
 	readonly className?: string;
+	/**
+	 * Maximum number of remote cursors animated at once (review U1).
+	 * Defaults to {@link DEFAULT_MAX_CURSORS}. Rooms under the cap render
+	 * every peer's cursor; past it, only the most-recently-moved cursors
+	 * animate — each cursor mounts two `motion` springs, so an uncapped
+	 * large room would otherwise spin up ~2N rAF loops. Selection rings are
+	 * unaffected. Pass `0` to render no cursors.
+	 */
+	readonly maxCursors?: number;
 }
 
 const CURSOR_SPRING = { stiffness: 400, damping: 28, mass: 0.6 } as const;
@@ -59,6 +83,30 @@ export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 	const peers = useCollabPeers();
 	const { showRemoteCursors } = useCollabCursorVisibility();
 	const showCursors = props.showCursors ?? showRemoteCursors;
+
+	// U1 — cap concurrently animated cursors to the most-recently-moved
+	// `maxCursors`, so a 50+ peer room doesn't spin up ~2N `motion` springs.
+	// Deriving the capped set into a ref during render mirrors the F5 identity
+	// cache in `context.tsx` (a pure derivation, no external side effect); the
+	// `memo`'d per-peer `showCursors` boolean only flips when a peer crosses
+	// the budget boundary, so steady-state movers don't re-render each other.
+	const budgetRef = useRef<CursorBudgetState | undefined>(undefined);
+	if (budgetRef.current === undefined) {
+		budgetRef.current = createCursorBudgetState();
+	}
+	const cursorIds = selectCursorPeers(
+		peers,
+		showCursors ? (props.maxCursors ?? DEFAULT_MAX_CURSORS) : 0,
+		budgetRef.current,
+	);
+
+	// U2 — wrap the host resolver in a layout-epoch cache so selection rects are
+	// computed at most once per node per layout epoch and refreshed on
+	// scroll/resize (see useLayoutEpochResolver).
+	const resolveSelectionRect = useLayoutEpochResolver(
+		props.resolveSelectionRect,
+	);
+
 	return (
 		<LazyMotion features={domAnimation}>
 			<div
@@ -73,13 +121,75 @@ export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 					<PeerOverlays
 						key={frame.peer.id}
 						frame={frame}
-						showCursors={showCursors}
-						resolveSelectionRect={props.resolveSelectionRect}
+						showCursors={showCursors && cursorIds.has(frame.peer.id)}
+						resolveSelectionRect={resolveSelectionRect}
 					/>
 				))}
 			</div>
 		</LazyMotion>
 	);
+}
+
+/**
+ * U2 — wrap the host's `resolveSelectionRect` in a layout-epoch cache.
+ *
+ * The resolver reads `getBoundingClientRect()` (synchronous layout). Without
+ * this, every selected node — and the *same* node selected by N peers — pays a
+ * fresh reflow on each render, and the rects silently go stale on scroll/resize
+ * because nothing triggers a re-render. We therefore (a) dedupe resolver calls
+ * within an epoch via a ref-held cache, and (b) bump the epoch — rAF-throttled —
+ * on `resize`/`scroll` and a `ResizeObserver` so rings refresh against fresh
+ * rects. The wrapped resolver's identity changes per epoch, which the ring
+ * `memo` comparator already keys on, so each layout change drives exactly one
+ * ring refresh rather than one per cursor frame. Inert when no resolver is set.
+ */
+function useLayoutEpochResolver(
+	resolve: ((nodeId: string) => PresenceSelectionRingRect | null) | undefined,
+): ((nodeId: string) => PresenceSelectionRingRect | null) | undefined {
+	const [epoch, setEpoch] = useState(0);
+	const cacheRef = useRef<{
+		epoch: number;
+		rects: Map<string, PresenceSelectionRingRect | null>;
+	}>({ epoch: 0, rects: new Map() });
+
+	useEffect(() => {
+		if (!resolve || typeof window === "undefined") return;
+		let frame = 0;
+		const bump = (): void => {
+			if (frame !== 0) return;
+			frame = requestAnimationFrame(() => {
+				frame = 0;
+				setEpoch((prev) => prev + 1);
+			});
+		};
+		window.addEventListener("resize", bump);
+		// Capture phase so a scroll inside the canvas or any nested scroller counts.
+		window.addEventListener("scroll", bump, true);
+		const observer =
+			typeof ResizeObserver === "function" ? new ResizeObserver(bump) : null;
+		if (observer && document.body) observer.observe(document.body);
+		return () => {
+			window.removeEventListener("resize", bump);
+			window.removeEventListener("scroll", bump, true);
+			observer?.disconnect();
+			if (frame !== 0) cancelAnimationFrame(frame);
+		};
+	}, [resolve]);
+
+	return useMemo(() => {
+		if (!resolve) return undefined;
+		return (nodeId: string): PresenceSelectionRingRect | null => {
+			const cache = cacheRef.current;
+			if (cache.epoch !== epoch) {
+				cache.epoch = epoch;
+				cache.rects.clear();
+			}
+			if (cache.rects.has(nodeId)) return cache.rects.get(nodeId) ?? null;
+			const rect = resolve(nodeId);
+			cache.rects.set(nodeId, rect);
+			return rect;
+		};
+	}, [resolve, epoch]);
 }
 
 interface PeerOverlaysProps {
@@ -91,7 +201,10 @@ interface PeerOverlaysProps {
 }
 
 function selectionSignature(frame: PresenceState): string {
-	return frame.selection?.nodeIds?.join("|") ?? "";
+	// U5 — JSON-encode (collision-proof) rather than `join("|")`: a nodeId
+	// containing the separator could otherwise alias two distinct selections,
+	// matching the `peerIdentitySignature` / `conflictKey` convention.
+	return JSON.stringify(frame.selection?.nodeIds ?? []);
 }
 
 function PeerOverlaysImpl({
@@ -179,8 +292,9 @@ function PeerSelectionRingsImpl({
  * F4 — `resolveSelectionRect` reads `getBoundingClientRect()`, so calling
  * it per selected node every frame forces synchronous layout. Re-render
  * the rings only when the peer's selection (or color) changes, NOT on
- * cursor moves. (A ResizeObserver/scroll layout-epoch cache that also
- * refreshes rects on canvas resize is the documented follow-up.)
+ * cursor moves. The ResizeObserver/scroll layout-epoch cache that refreshes
+ * rects on canvas resize (and dedupes the resolver per node) now lives in
+ * `useLayoutEpochResolver` (review U2).
  */
 function compareSelectionRings(
 	prev: PeerSelectionRingsProps,
@@ -224,6 +338,9 @@ function RemoteCursorImpl({ peer, x, y }: RemoteCursorProps): ReactNode {
 		else sy.set(y);
 	}, [sy, y, shouldReduceMotion]);
 	const color = peer.color ?? DEFAULT_COLOR;
+	// U3 — localize the auto-generated anonymous label per viewer.
+	const msg = useMsg();
+	const label = resolveDisplayName(peer, msg("collabUi.identity.anonymous"));
 	return (
 		<m.div
 			data-slot="presence-cursor"
@@ -248,13 +365,13 @@ function RemoteCursorImpl({ peer, x, y }: RemoteCursorProps): ReactNode {
 					strokeLinejoin="round"
 				/>
 			</svg>
-			{peer.displayName ? (
+			{label ? (
 				<span
 					data-slot="presence-cursor-label"
 					className="ml-3 inline-block translate-y-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-white"
 					style={{ backgroundColor: color }}
 				>
-					{peer.displayName}
+					{label}
 				</span>
 			) : null}
 		</m.div>
