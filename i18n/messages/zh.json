@@ -31,5 +31,6 @@
 	"collabUi.settings.copyLink": "复制房间链接",
 	"collabUi.peers.connectedOne": "{count} 位协作者在线",
 	"collabUi.peers.connectedMany": "{count} 位协作者在线",
-	"collabUi.peers.more": "还有 {count} 位"
+	"collabUi.peers.more": "还有 {count} 位",
+	"collabUi.identity.anonymous": "匿名"
 }

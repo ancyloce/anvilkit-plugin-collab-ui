@@ -31,5 +31,6 @@
 	"collabUi.settings.copyLink": "Copy room link",
 	"collabUi.peers.connectedOne": "{count} collaborator connected",
 	"collabUi.peers.connectedMany": "{count} collaborators connected",
-	"collabUi.peers.more": "{count} more"
+	"collabUi.peers.more": "{count} more",
+	"collabUi.identity.anonymous": "Anonymous"
 }
