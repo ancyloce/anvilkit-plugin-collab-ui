@@ -1,6 +1,6 @@
 # @anvilkit/collab-ui
 
-> **Release candidate (`0.1.0-rc.4`).** Tracks `@anvilkit/plugin-collab-yjs` on the `@next` npm tag. Both packages cut a joint GA once the SnapshotAdapter v2 contract is frozen.
+> **Release candidate (`0.1.0-rc.9`).** Tracks `@anvilkit/plugin-collab-yjs` on the `@next` npm tag. Both packages cut a joint GA once the SnapshotAdapter v2 contract is frozen.
 
 Host UI primitives for [`@anvilkit/plugin-collab-yjs`](../plugin-collab-yjs/README.md). The Yjs plugin is headless — it ships the CRDT layer, the SnapshotAdapter, presence wiring, and conflict diagnostics, but no DOM. This package fills in the UI: a context provider that surfaces live collab state plus a set of shadcn-style components host apps drop into their editor chrome. The consolidated `createCollabPlugin()` factory bundles both packages into a single `StudioPlugin` for the common case.
 
@@ -66,12 +66,12 @@ createCollabPlugin({ doc, awareness, connectionSource, self, puckConfig });
 
 When both `doc` and `websocketUrl` are set, `doc` (BYO) wins and a one-time dev warning names the ignored field.
 
-The bundled `<PresenceLayer>` and `<ConflictNoticeCenter>` are mounted by the plugin automatically — pass `presence: { enabled: false }` or `notifications: { enabled: false }` to opt out of either. The collaborator avatar stack is always contributed to the core `collaborators` header slot; override it via the host's `collaboratorsSlot` prop on `<Studio>` if you need different chrome.
+The bundled `<PresenceLayer>` and `<ConflictNoticeCenter>` are mounted by the plugin automatically — pass `presence: { enabled: false }` or `notifications: { enabled: false }` to opt out of either. The collaborator avatar stack is always contributed to the core `collaborators` header slot. That slot is single-occupancy with first-registration-wins, so to swap in different chrome register your own plugin that contributes a `collaborators` slot ahead of this one.
 
 ## Core features
 
 - **One-call integration** — `createCollabPlugin()` returns a single `StudioPlugin` that bundles the Yjs data-sync plugin, the context provider, the presence overlay, the conflict toaster, and the collaborator avatar stack.
-- **Five split contexts** — adapter / identity / status / peers / conflicts / cursor-visibility are independent providers, so high-churn remote cursor updates never re-render the status pill or conflict toaster.
+- **Split contexts** — adapter / identity / status / peers / peer-identities / conflicts / cursor-visibility are independent providers, so high-churn remote cursor updates never re-render the status pill or conflict toaster.
 - **Selector-thin hooks** — every primitive subscribes only to the slice it reads (`useCollabPeers`, `useCollabStatus`, `useCollabConflictQueue`, etc.).
 - **shadcn-compatible components** — 8 unstyled-framework-friendly building blocks. Use them whole or wire your own UI on top of the hooks.
 - **Identity mirror** — `onIdentityChange` lets the host's auth store mirror downstream display-name / color edits back to its source of truth.
@@ -252,7 +252,7 @@ If you genuinely need every slice in one component, use `useCollabContext()` —
 | You want a one-line integration with the default chrome.                      | `createCollabPlugin()` from this package.                                                                                     |
 | You want only the data layer (read-only viewer, custom UI, server-side sync). | `createYjsAdapter` + `createCollabDataPlugin` from `@anvilkit/plugin-collab-yjs`.                                             |
 | You want the hooks but custom components.                                     | Headless adapter + manual `<CollabUIProvider>`.                                                                               |
-| You want some of the bundled UI but not all.                                  | `createCollabPlugin()` with `presence.enabled: false` / `notifications.enabled: false` (the `collaborators` slot is always contributed — override via `<Studio collaboratorsSlot>`). |
+| You want some of the bundled UI but not all.                                  | `createCollabPlugin()` with `presence.enabled: false` / `notifications.enabled: false` (the `collaborators` slot is always contributed — override by registering your own `collaborators` slot first). |
 
 ### Cursor visibility toggle
 
@@ -260,7 +260,7 @@ If you genuinely need every slice in one component, use `useCollabContext()` —
 
 ### Bundled components are slot contributions
 
-The factory registers `<PeerAvatarStack>` to the header `collaborators` slot. The host's `collaboratorsSlot` prop on `<Studio>` still wins per the Studio plugin contract — pass your own component there to override the default.
+The factory registers `<PeerAvatarStack>` to the header `collaborators` slot. Slots are single-occupancy and the first registration wins per the Studio plugin contract — register your own plugin contributing the `collaborators` slot ahead of this one to override the default.
 
 ### Dependency contract
 
