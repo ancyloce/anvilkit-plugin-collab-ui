@@ -147,6 +147,28 @@ All components live at `@anvilkit/collab-ui/components/<name>`. They consume con
 | `CollabSettingsPopover`   | `roomId?: string`, `roomLink?: string`                                                                                        |
 | `CollabPresencePublisher` | `root: HTMLElement`, `frameSelector?: string`                                                                                 |
 
+### Provider requirements
+
+Every hook and component in this package reads collab context, so each one **must** be rendered inside `<CollabUIProvider>` (or under a `<Studio>` that registers the consolidated `createCollabPlugin()` factory). Calling a hook — `useCollabStatus()`, `useCollabPeers()`, `useCollabContext()`, etc. — or rendering a component (`SyncActivityIndicator`, `CollabRoomBar`, …) outside the provider **throws synchronously** (`<hook> must be called inside <CollabUIProvider>.`) instead of silently rendering empty state. There is no built-in error boundary: if you mount these primitives conditionally, wrap them in your own boundary or guard the mount yourself.
+
+When you drop the `./components/*` building blocks in **standalone — i.e. OUTSIDE a `<Studio>` shell** — components that render localized copy also need the i18n catalog. Wrap them in `<CollabUII18nProvider>`, nested **inside** `<CollabUIProvider>` (never around it — the two contexts are independent), so their `collabUi.*` strings resolve to the active locale:
+
+```tsx
+import {
+  CollabUIProvider,
+  CollabUII18nProvider,
+} from "@anvilkit/collab-ui";
+import { CollabRoomBar } from "@anvilkit/collab-ui/components/collab-room-bar";
+
+<CollabUIProvider adapter={adapter} self={self}>
+  <CollabUII18nProvider>
+    <CollabRoomBar title="Untitled doc" />
+  </CollabUII18nProvider>
+</CollabUIProvider>;
+```
+
+In-chrome usage (under `<Studio>` with the plugin registered) needs **no** i18n wrapper — the plugin's `register()` contributes the `collabUi.*` namespace to core's message catalog automatically.
+
 ## Usage examples
 
 ### Headless adapter + custom UI
