@@ -19,6 +19,21 @@ function countCursors(container: HTMLElement): number {
 	return container.querySelectorAll("[data-slot=presence-cursor]").length;
 }
 
+function countRings(container: HTMLElement): number {
+	return container.querySelectorAll("[data-slot=presence-selection-ring]")
+		.length;
+}
+
+/** A peer selecting `nodes` distinct node ids, ids `<id>n<j>`. */
+function selectionPeer(id: string, nodes: number): PresenceState {
+	return {
+		peer: { id },
+		selection: {
+			nodeIds: Array.from({ length: nodes }, (_, j) => `${id}n${j}`),
+		},
+	};
+}
+
 function renderLayer(
 	props: CollabPresenceLayerProps,
 	self: { id: string; displayName?: string } = { id: "me" },
@@ -63,6 +78,48 @@ describe("<PresenceLayer /> cursor budget (review U1)", () => {
 		const { container, emitPeers } = renderLayer({ maxCursors: 0 });
 		emitPeers([cursorPeer("a", 1), cursorPeer("b", 2)]);
 		expect(countCursors(container)).toBe(0);
+	});
+});
+
+describe("<PresenceLayer /> selection-ring budget (review M4 / report 4.2.4)", () => {
+	const resolve = (): {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	} => ({
+		x: 0,
+		y: 0,
+		width: 10,
+		height: 10,
+	});
+
+	it("renders every selection ring for a small selection set (default cap)", () => {
+		const { container, emitPeers } = renderLayer({
+			resolveSelectionRect: resolve,
+		});
+		emitPeers([selectionPeer("a", 2), selectionPeer("b", 1)]);
+		expect(countRings(container)).toBe(3);
+	});
+
+	it("caps the TOTAL rings across all peers, not per peer", () => {
+		// 6 peers x 5 nodes = 30 candidate rings; cap 12. A per-peer cap of 12
+		// would render all 30 (each peer has only 5); the TOTAL cap renders 12.
+		const { container, emitPeers } = renderLayer({
+			resolveSelectionRect: resolve,
+			maxSelectionRings: 12,
+		});
+		emitPeers(Array.from({ length: 6 }, (_, i) => selectionPeer(`p${i}`, 5)));
+		expect(countRings(container)).toBe(12);
+	});
+
+	it("renders no selection rings when maxSelectionRings is 0", () => {
+		const { container, emitPeers } = renderLayer({
+			resolveSelectionRect: resolve,
+			maxSelectionRings: 0,
+		});
+		emitPeers([selectionPeer("a", 3), selectionPeer("b", 3)]);
+		expect(countRings(container)).toBe(0);
 	});
 });
 
