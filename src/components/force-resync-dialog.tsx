@@ -28,6 +28,7 @@ export interface ForceResyncDialogLabels {
 	readonly confirmBusy?: string;
 }
 
+/** Props for {@link ForceResyncDialog} — the controlled confirm dialog that triggers `adapter.forceResync()`. */
 export interface ForceResyncDialogProps {
 	readonly open: boolean;
 	readonly onOpenChange: (open: boolean) => void;

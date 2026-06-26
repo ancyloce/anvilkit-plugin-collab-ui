@@ -13,6 +13,7 @@ import { useCollabPeerIdentities, useCollabSelf } from "../context.js";
 import { resolveDisplayName } from "../lib/anon-identity.js";
 import { cn } from "../lib/cn.js";
 
+/** Props for {@link PeerAvatarStack} — the stacked collaborator avatars (self + remote peers). */
 export interface PeerAvatarStackProps {
 	readonly className?: string;
 	readonly maxVisible?: number;
@@ -52,10 +53,17 @@ export function PeerAvatarStack(props: PeerAvatarStackProps): ReactNode {
 		<ul
 			className={cn("flex items-center list-none m-0 p-0", props.className)}
 			data-slot="peer-avatar-stack"
-			aria-label={(collaborators.length === 1
-				? msg("collabUi.peers.connectedOne")
-				: msg("collabUi.peers.connectedMany")
-			).replace("{count}", String(collaborators.length))}
+			aria-label={
+				// Zero REMOTE peers reads as the distinct "Only you" state, so the
+				// label never conflates "only you are here" with "1 collaborator
+				// connected". With N≥1 remote peers the existing count copy stands.
+				peers.length === 0
+					? msg("collabUi.avatars.onlyYou")
+					: (collaborators.length === 1
+							? msg("collabUi.peers.connectedOne")
+							: msg("collabUi.peers.connectedMany")
+						).replace("{count}", String(collaborators.length))
+			}
 		>
 			<AvatarGroup
 				className="flex -space-x-2 h-7"

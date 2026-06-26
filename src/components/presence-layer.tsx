@@ -31,7 +31,12 @@ import {
 	DEFAULT_MAX_CURSORS,
 	selectCursorPeers,
 } from "../lib/cursor-budget.js";
+import {
+	capSelectionRings,
+	DEFAULT_MAX_SELECTION_RINGS,
+} from "../lib/selection-ring-budget.js";
 
+/** Props for {@link PresenceLayer} — the overlay that renders remote peer cursors and selection rings. */
 export interface CollabPresenceLayerProps {
 	/**
 	 * Per-instance override for remote-cursor visibility. When
@@ -53,6 +58,18 @@ export interface CollabPresenceLayerProps {
 	 * unaffected. Pass `0` to render no cursors.
 	 */
 	readonly maxCursors?: number;
+	/**
+	 * Maximum number of remote selection rings rendered across ALL peers at
+	 * once (review M4 / report 4.2.4). Defaults to
+	 * {@link DEFAULT_MAX_SELECTION_RINGS}. Each ring is a positioned overlay
+	 * whose rect comes from a synchronous layout read, so a pathological room
+	 * (many peers each multi-selecting many nodes) would otherwise mount
+	 * `peers × nodes` overlay DOM nodes without bound. The cap counts the
+	 * TOTAL, not per peer; over the cap the first rings in deterministic
+	 * peer-then-node order survive. Pass `0` to render no selection rings.
+	 * Independent of {@link maxCursors}.
+	 */
+	readonly maxSelectionRings?: number;
 }
 
 const CURSOR_SPRING = { stiffness: 400, damping: 28, mass: 0.6 } as const;
@@ -107,6 +124,27 @@ export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 		props.resolveSelectionRect,
 	);
 
+	// M4 — cap the TOTAL selection rings across all peers (report 4.2.4). Each
+	// ring is a positioned overlay sourced from a synchronous layout read, so a
+	// many-peer × many-node selection would otherwise mount unbounded overlay
+	// DOM. Flatten peer×node and slice to the cap, then redistribute the
+	// surviving count back to each peer so the per-peer ring `memo` (F4) still
+	// skips re-rendering rings on cursor moves. The allotment depends only on
+	// selections + peer order (never on cursor coords), so it stays stable
+	// across cursor-only frames. Inert when no resolver is set (no rings render).
+	const ringAllotment = new Map<string, number>();
+	if (resolveSelectionRect) {
+		for (const target of capSelectionRings(
+			peers,
+			props.maxSelectionRings ?? DEFAULT_MAX_SELECTION_RINGS,
+		)) {
+			ringAllotment.set(
+				target.peerId,
+				(ringAllotment.get(target.peerId) ?? 0) + 1,
+			);
+		}
+	}
+
 	return (
 		<LazyMotion features={domAnimation}>
 			<div
@@ -123,6 +161,7 @@ export function PresenceLayer(props: CollabPresenceLayerProps): ReactNode {
 						frame={frame}
 						showCursors={showCursors && cursorIds.has(frame.peer.id)}
 						resolveSelectionRect={resolveSelectionRect}
+						maxRings={ringAllotment.get(frame.peer.id) ?? 0}
 					/>
 				))}
 			</div>
@@ -198,6 +237,12 @@ interface PeerOverlaysProps {
 	readonly resolveSelectionRect?: (
 		nodeId: string,
 	) => PresenceSelectionRingRect | null;
+	/**
+	 * M4 — how many of this peer's selected nodes may render a ring, after the
+	 * global {@link CollabPresenceLayerProps.maxSelectionRings} cap is
+	 * distributed across peers in order (report 4.2.4).
+	 */
+	readonly maxRings: number;
 }
 
 function selectionSignature(frame: PresenceState): string {
@@ -211,6 +256,7 @@ function PeerOverlaysImpl({
 	frame,
 	showCursors,
 	resolveSelectionRect,
+	maxRings,
 }: PeerOverlaysProps): ReactNode {
 	const cursor = frame.cursor;
 	return (
@@ -218,10 +264,11 @@ function PeerOverlaysImpl({
 			{showCursors && cursor ? (
 				<RemoteCursor peer={frame.peer} x={cursor.x} y={cursor.y} />
 			) : null}
-			{resolveSelectionRect ? (
+			{resolveSelectionRect && maxRings > 0 ? (
 				<PeerSelectionRings
 					frame={frame}
 					resolveSelectionRect={resolveSelectionRect}
+					maxRings={maxRings}
 				/>
 			) : null}
 		</>
@@ -240,7 +287,11 @@ function comparePeerFrame(
 ): boolean {
 	if (
 		prev.showCursors !== next.showCursors ||
-		prev.resolveSelectionRect !== next.resolveSelectionRect
+		prev.resolveSelectionRect !== next.resolveSelectionRect ||
+		// M4 — a peer's ring allotment can shrink when an EARLIER peer adds
+		// selections and consumes the global cap, even though this peer's own
+		// selection is unchanged. Re-render so the slice is re-applied.
+		prev.maxRings !== next.maxRings
 	) {
 		return false;
 	}
@@ -264,13 +315,20 @@ interface PeerSelectionRingsProps {
 	readonly resolveSelectionRect: (
 		nodeId: string,
 	) => PresenceSelectionRingRect | null;
+	/** M4 — how many of this peer's selected nodes may render a ring. */
+	readonly maxRings: number;
 }
 
 function PeerSelectionRingsImpl({
 	frame,
 	resolveSelectionRect,
+	maxRings,
 }: PeerSelectionRingsProps): ReactNode {
-	const selection = frame.selection?.nodeIds ?? [];
+	const nodeIds = frame.selection?.nodeIds ?? [];
+	// M4 — slice from the front so the rendered rings match the deterministic
+	// peer-then-node order that `capSelectionRings` keeps (report 4.2.4).
+	const selection =
+		maxRings < nodeIds.length ? nodeIds.slice(0, maxRings) : nodeIds;
 	return (
 		<>
 			{selection.map((nodeId) => {
@@ -301,6 +359,9 @@ function compareSelectionRings(
 	next: PeerSelectionRingsProps,
 ): boolean {
 	if (prev.resolveSelectionRect !== next.resolveSelectionRect) return false;
+	// M4 — a shrinking ring allotment must re-slice even if the selection is
+	// otherwise identical (an earlier peer consumed more of the global cap).
+	if (prev.maxRings !== next.maxRings) return false;
 	const a = prev.frame;
 	const b = next.frame;
 	if (a === b) return true;

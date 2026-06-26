@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 import { useCollabAdapter, useCollabSelf } from "../context.js";
 
+/** Props for {@link CollabPresencePublisher} — the opt-in local cursor/selection publisher. */
 export interface CollabPresencePublisherProps {
 	/**
 	 * Element whose pointer movement is published as the local

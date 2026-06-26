@@ -13,6 +13,7 @@ import { ForceResyncDialog } from "./force-resync-dialog.js";
 /** The `useMsg()` resolver shape, threaded into the default formatter. */
 type Msg = (key: string, fallback?: string) => string;
 
+/** Props for {@link ConflictNoticeCenter} — the toast center for collab conflict events. */
 export interface ConflictNoticeCenterProps {
 	/**
 	 * Emitted only on overlap conflicts; future kinds (merge, etc.)

@@ -21,6 +21,7 @@ import { normalizeHexColor } from "../lib/color.js";
 
 const DEFAULT_PEER_COLOR = "#3b82f6";
 
+/** Props for {@link CollabSettingsPopover} — the identity / room-link / cursor-visibility settings panel. */
 export interface CollabSettingsPopoverProps {
 	readonly className?: string;
 	readonly roomId?: string;

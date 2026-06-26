@@ -66,6 +66,15 @@ export interface SyncActivityLabels {
 	readonly reason?: string;
 	readonly lastSync?: string;
 	readonly lastPeer?: string;
+	// Advanced diagnostics rows (gated behind `showAdvancedDiagnostics`).
+	readonly latencyP50?: string;
+	readonly coalescingRatio?: string;
+	readonly inboundCoalesced?: string;
+	readonly queueDelayP50?: string;
+	readonly conversionTime?: string;
+	readonly dispatchTime?: string;
+	readonly dispatchFailures?: string;
+	readonly awarenessChurn?: string;
 }
 
 function buildDefaultSyncLabels(msg: Msg): Required<SyncActivityLabels> {
@@ -80,9 +89,18 @@ function buildDefaultSyncLabels(msg: Msg): Required<SyncActivityLabels> {
 		reason: msg("collabUi.sync.reason"),
 		lastSync: msg("collabUi.sync.lastSync"),
 		lastPeer: msg("collabUi.sync.lastPeer"),
+		latencyP50: msg("collabUi.sync.latencyP50"),
+		coalescingRatio: msg("collabUi.sync.coalescingRatio"),
+		inboundCoalesced: msg("collabUi.sync.inboundCoalesced"),
+		queueDelayP50: msg("collabUi.sync.queueDelayP50"),
+		conversionTime: msg("collabUi.sync.conversionTime"),
+		dispatchTime: msg("collabUi.sync.dispatchTime"),
+		dispatchFailures: msg("collabUi.sync.dispatchFailures"),
+		awarenessChurn: msg("collabUi.sync.awarenessChurn"),
 	};
 }
 
+/** Props for {@link SyncActivityIndicator} — the connection-status dot plus its metrics/diagnostics popover. */
 export interface SyncActivityIndicatorProps {
 	readonly className?: string;
 	readonly latencyMs?: number;
@@ -91,6 +109,14 @@ export interface SyncActivityIndicatorProps {
 	/** Override the status-line copy (incl. interpolated offline/reconnecting forms). */
 	readonly formatStatus?: (status: ConnectionStatus) => string;
 	readonly labels?: SyncActivityLabels;
+	/**
+	 * Render extra adapter-metric rows (coalescing + conversion/dispatch
+	 * latency) in the popover for production incident triage. Defaults to
+	 * `false`, leaving the panel output byte-identical to the prior version;
+	 * each advanced row is itself omitted when its metric field is absent
+	 * (e.g. a `null` latency with no samples).
+	 */
+	readonly showAdvancedDiagnostics?: boolean;
 }
 
 export function SyncActivityIndicator(
@@ -198,6 +224,74 @@ export function SyncActivityIndicator(
 						<>
 							<dt>{labels.lastPeer}</dt>
 							<dd>{props.lastPeerName}</dd>
+						</>
+					) : null}
+					{props.showAdvancedDiagnostics ? (
+						<>
+							{metrics?.syncLatencyP50Ms != null ? (
+								<>
+									<dt>{labels.latencyP50}</dt>
+									<dd data-testid="sync-latency-p50">
+										{metrics.syncLatencyP50Ms} ms
+									</dd>
+								</>
+							) : null}
+							{metrics?.saveCoalescingRatio != null ? (
+								<>
+									<dt>{labels.coalescingRatio}</dt>
+									<dd data-testid="sync-coalescing-ratio">
+										{metrics.saveCoalescingRatio}
+									</dd>
+								</>
+							) : null}
+							{metrics?.inboundCoalesced != null ? (
+								<>
+									<dt>{labels.inboundCoalesced}</dt>
+									<dd data-testid="sync-inbound-coalesced">
+										{metrics.inboundCoalesced}
+									</dd>
+								</>
+							) : null}
+							{metrics?.inboundQueueDelayP50Ms != null ? (
+								<>
+									<dt>{labels.queueDelayP50}</dt>
+									<dd data-testid="sync-queue-delay-p50">
+										{metrics.inboundQueueDelayP50Ms} ms
+									</dd>
+								</>
+							) : null}
+							{metrics?.conversionTimeP50Ms != null ? (
+								<>
+									<dt>{labels.conversionTime}</dt>
+									<dd data-testid="sync-conversion-p50">
+										{metrics.conversionTimeP50Ms} ms
+									</dd>
+								</>
+							) : null}
+							{metrics?.dispatchTimeP50Ms != null ? (
+								<>
+									<dt>{labels.dispatchTime}</dt>
+									<dd data-testid="sync-dispatch-p50">
+										{metrics.dispatchTimeP50Ms} ms
+									</dd>
+								</>
+							) : null}
+							{metrics?.dispatchFailures != null ? (
+								<>
+									<dt>{labels.dispatchFailures}</dt>
+									<dd data-testid="sync-dispatch-failures">
+										{metrics.dispatchFailures}
+									</dd>
+								</>
+							) : null}
+							{metrics?.awarenessChurn != null ? (
+								<>
+									<dt>{labels.awarenessChurn}</dt>
+									<dd data-testid="sync-awareness-churn">
+										{metrics.awarenessChurn}
+									</dd>
+								</>
+							) : null}
 						</>
 					) : null}
 				</dl>
