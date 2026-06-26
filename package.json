@@ -26,16 +26,6 @@
 				"types": "./dist/components/*.d.cts",
 				"default": "./dist/components/*.cjs"
 			}
-		},
-		"./*": {
-			"import": {
-				"types": "./dist/*.d.ts",
-				"default": "./dist/*.js"
-			},
-			"require": {
-				"types": "./dist/*.d.cts",
-				"default": "./dist/*.cjs"
-			}
 		}
 	},
 	"files": [
