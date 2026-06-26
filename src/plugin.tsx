@@ -17,9 +17,12 @@
  *        `<CollabUIProvider>` (so `useCollabContext`/`useCollabPeers`/
  *        ... work everywhere the host renders) plus an internal
  *        `<IdentitySync>` side-effect component for `onIdentityChange`
- *        and, unless `presence.broadcastCursor` is `false`, a turnkey
- *        `<PresenceCursorBroadcaster>` so the local cursor is published
- *        without any host pointer wiring.
+ *        and, unless `presence.broadcastCursor` is `false`, a single
+ *        turnkey presence writer so the local cursor is published without
+ *        any host pointer wiring. The writer is the Puck-free
+ *        `<PresenceCursorBroadcaster>` by default, or the Puck-aware
+ *        `<CollabPresencePublisher>` (cursor + selection) when
+ *        `presencePublishing: "cursor+selection"` is set.
  *      - `overlays` — `<PresenceLayer>` at `"canvas"` placement and
  *        `<ConflictNoticeCenter>` at `"notifications"`.
  *      - `slots` — `<PeerAvatarStack>` at the core `"collaborators"`
@@ -47,6 +50,10 @@ import {
 	createYjsAdapter,
 	type PersistenceOptions,
 	type PolicyViolation,
+	type PropGuardOptions,
+	type ResolveConflict,
+	type SnapshotPersistenceOptions,
+	type UndoOptions,
 	type ValidateRemoteIR,
 	type ValidationFailure,
 } from "@anvilkit/plugin-collab-yjs";
@@ -78,15 +85,19 @@ import packageJson from "../package.json";
 type YDoc = CreateYjsAdapterOptions["doc"];
 type Awareness = NonNullable<CreateYjsAdapterOptions["awareness"]>;
 
+import { CollabPresenceAnnouncer } from "./components/collab-presence-announcer.js";
 import type { ConflictNoticeCenterProps } from "./components/conflict-notice-center.js";
 import { PeerAvatarStack } from "./components/peer-avatar-stack.js";
-import { PresenceCursorBroadcaster } from "./components/presence-cursor-broadcaster.js";
 import type { CollabPresenceLayerProps } from "./components/presence-layer.js";
 import { createConflictOverlay } from "./conflict-overlay.js";
 import { CollabUIProvider } from "./context.js";
 import { COLLAB_UI_ENTRY } from "./i18n/entry.js";
 import { IdentitySync } from "./identity-sync.js";
 import { makeAnonSelf } from "./lib/anon-identity.js";
+import {
+	type PresencePublishingMode,
+	selectPresenceWriter,
+} from "./lib/select-presence-writer.js";
 import { createPresenceOverlay } from "./presence-overlay.js";
 
 /**
@@ -197,6 +208,40 @@ export interface CreateCollabPluginOptions {
 	 * Cross-tab persistence options (IndexedDB / BroadcastChannel).
 	 */
 	readonly persistence?: PersistenceOptions;
+	/**
+	 * Opt-in local undo/redo (§4.1.1). Forwarded to `createYjsAdapter`,
+	 * which wraps a `Y.UndoManager` over the shared type backing the live
+	 * `PageIR` and exposes the `UndoController`. Omit to keep the
+	 * pre-undo behavior (inert controller). See
+	 * `@anvilkit/plugin-collab-yjs`'s `CreateYjsAdapterOptions.undo`.
+	 */
+	readonly undo?: UndoOptions;
+	/**
+	 * Opt-in server-grade snapshot persistence (§4.2.2). Forwarded to
+	 * `createYjsAdapter` — every `save()` best-effort mirrors the snapshot
+	 * to the supplied backend sink. Omit to keep the in-`Y.Doc` snapshot
+	 * store as the only sink. See
+	 * `@anvilkit/plugin-collab-yjs`'s
+	 * `CreateYjsAdapterOptions.snapshotPersistence`.
+	 */
+	readonly snapshotPersistence?: SnapshotPersistenceOptions;
+	/**
+	 * Per-prop decode bounds applied at the native-tree trust boundary
+	 * (Y3/§4.1.3). Forwarded to `createYjsAdapter`. A prop value exceeding
+	 * any bound is dropped from the decoded node. Omit for the permissive
+	 * defaults. See `@anvilkit/plugin-collab-yjs`'s
+	 * `CreateYjsAdapterOptions.propGuards`.
+	 */
+	readonly propGuards?: PropGuardOptions;
+	/**
+	 * Optional semantic merge-strategy hook for same-node, same-field prop
+	 * conflicts (§4.2.3). Forwarded to `createYjsAdapter`. Returning
+	 * `"local"` / `{ fields }` writes a resolution back into the shared
+	 * `Y.Doc`; `"remote"` / `undefined` keeps last-write-wins. Omit to keep
+	 * pure last-write-wins. See `@anvilkit/plugin-collab-yjs`'s
+	 * `CreateYjsAdapterOptions.resolveConflict`.
+	 */
+	readonly resolveConflict?: ResolveConflict;
 
 	// ── Data plugin behavior (forwarded to createCollabDataPlugin) ───
 	/**
@@ -260,6 +305,47 @@ export interface CreateCollabPluginOptions {
 		readonly enabled?: boolean;
 		readonly broadcastCursor?: boolean;
 	};
+	/**
+	 * Which local-presence frames the bundled writer publishes. Default
+	 * `"cursor"` (byte-for-byte today's behavior): the Puck-free
+	 * `<PresenceCursorBroadcaster>` is mounted and publishes only pointer
+	 * coordinates.
+	 *
+	 * Set `"cursor+selection"` to instead mount the Puck-aware
+	 * `<CollabPresencePublisher>`, which publishes pointer coordinates AND
+	 * the current Puck selection ring (via `usePuckSelection()`) in a single
+	 * awareness frame. The combined publisher is mounted INSTEAD OF the
+	 * cursor-only broadcaster — never alongside it — because awareness
+	 * *replaces* the local frame on every update, so two writers would
+	 * clobber each other.
+	 *
+	 * **Single Puck-module-context requirement.** `"cursor+selection"` reads
+	 * the selection through `createUsePuck()`, which binds to whichever
+	 * `@puckeditor/core` instance THIS package resolved. The host MUST
+	 * dedupe `@puckeditor/core` to a single copy so the plugin's selection
+	 * hook subscribes to the same `<Puck>` the host renders; a duplicated
+	 * core throws "usePuck must be used inside <Puck>". Hosts that cannot
+	 * guarantee a single core copy should keep the default `"cursor"` mode
+	 * and broadcast selection from their own writer (`broadcastCursor: false`).
+	 *
+	 * Honored only while the bundled writer is mounted — i.e. when presence
+	 * is enabled and `presence.broadcastCursor` is not `false`.
+	 */
+	readonly presencePublishing?: PresencePublishingMode;
+	/**
+	 * Seed the initial remote-cursor visibility on the bundled
+	 * `<CollabUIProvider>` (review §4.2.1). Forwarded verbatim so a host
+	 * can restore a persisted preference on mount. Defaults to `true`
+	 * (cursors visible). Kept host-driven — no storage is baked into the
+	 * plugin.
+	 */
+	readonly initialShowRemoteCursors?: boolean;
+	/**
+	 * Fired whenever remote-cursor visibility changes (settings toggle or
+	 * a programmatic `setShowRemoteCursors`), so a host can persist the
+	 * preference (review §4.2.1). Forwarded to `<CollabUIProvider>`.
+	 */
+	readonly onShowRemoteCursorsChange?: (next: boolean) => void;
 	/**
 	 * Props forwarded to `<ConflictNoticeCenter>`. Pass
 	 * `enabled: false` to skip the toaster.
@@ -409,6 +495,10 @@ export function createCollabPlugin(
 		computeDelta,
 		awarenessRateLimit,
 		persistence,
+		undo,
+		snapshotPersistence,
+		propGuards,
+		resolveConflict,
 		saveDebounceMs,
 		puckConfig,
 		validateRemoteIR,
@@ -417,7 +507,10 @@ export function createCollabPlugin(
 		onPolicyViolation,
 		onSaveError,
 		presence: presenceOpts,
+		presencePublishing,
 		notifications: notificationsOpts,
+		initialShowRemoteCursors,
+		onShowRemoteCursorsChange,
 	} = options;
 
 	// Resolved once per plugin instance, stable across Studio recompiles:
@@ -433,6 +526,14 @@ export function createCollabPlugin(
 	// remote cursors with no extra wiring.
 	const broadcastCursorEnabled =
 		presenceEnabled && presenceOpts?.broadcastCursor !== false;
+	// Pick the single writer the provider mounts: cursor-only (default,
+	// Puck-free) or the combined cursor+selection publisher. Exactly one is
+	// ever mounted — never both — so they never clobber each other's
+	// awareness frames (see `selectPresenceWriter`).
+	const PresenceWriter = selectPresenceWriter(
+		broadcastCursorEnabled,
+		presencePublishing ?? "cursor",
+	);
 	const notificationsEnabled = notificationsOpts?.enabled !== false;
 
 	return {
@@ -468,6 +569,10 @@ export function createCollabPlugin(
 				computeDelta,
 				awarenessRateLimit,
 				persistence,
+				undo,
+				snapshotPersistence,
+				propGuards,
+				resolveConflict,
 			});
 
 			// P2 — coalesce keystroke-rate local saves by default. Only the data
@@ -502,9 +607,17 @@ export function createCollabPlugin(
 			}: {
 				readonly children: ReactNode;
 			}): ReactNode => (
-				<CollabUIProvider adapter={adapter} self={self}>
+				<CollabUIProvider
+					adapter={adapter}
+					self={self}
+					initialShowRemoteCursors={initialShowRemoteCursors}
+					onShowRemoteCursorsChange={onShowRemoteCursorsChange}
+				>
 					<IdentitySync onIdentityChange={onIdentityChange} />
-					{broadcastCursorEnabled ? <PresenceCursorBroadcaster /> : null}
+					{PresenceWriter ? <PresenceWriter /> : null}
+					{/* Single global mount → a11y join/leave announced once, with
+					    no double-announce risk. */}
+					<CollabPresenceAnnouncer />
 					{children}
 				</CollabUIProvider>
 			);

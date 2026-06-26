@@ -1,4 +1,8 @@
 export {
+	CollabPresenceAnnouncer,
+	type CollabPresenceAnnouncerProps,
+} from "./components/collab-presence-announcer.js";
+export {
 	CollabPresencePublisher,
 	type CollabPresencePublisherProps,
 } from "./components/collab-presence-publisher.js";
@@ -11,9 +15,18 @@ export {
 	type CollabSettingsPopoverProps,
 } from "./components/collab-settings-popover.js";
 export {
+	CollabUndoRedoControls,
+	type CollabUndoRedoControlsProps,
+} from "./components/collab-undo-redo-controls.js";
+export {
 	ConflictNoticeCenter,
 	type ConflictNoticeCenterProps,
 } from "./components/conflict-notice-center.js";
+export {
+	ConnectionRecoveryBanner,
+	type ConnectionRecoveryBannerLabels,
+	type ConnectionRecoveryBannerProps,
+} from "./components/connection-recovery-banner.js";
 export {
 	ForceResyncDialog,
 	type ForceResyncDialogLabels,
@@ -37,6 +50,7 @@ export {
 	type CollabUIContextValue,
 	CollabUIProvider,
 	type CollabUIProviderProps,
+	type CollabUndoState,
 	useCollabAdapter,
 	useCollabConflictQueue,
 	useCollabConflicts,
@@ -48,9 +62,11 @@ export {
 	useCollabPeers,
 	useCollabSelf,
 	useCollabStatus,
+	useCollabUndoState,
 } from "./context.js";
 export { CollabUII18nProvider } from "./i18n/provider.js";
 export { conflictKey } from "./lib/conflict-key.js";
+export type { PresencePublishingMode } from "./lib/select-presence-writer.js";
 export {
 	type CreateCollabPluginOptions,
 	createCollabPlugin,

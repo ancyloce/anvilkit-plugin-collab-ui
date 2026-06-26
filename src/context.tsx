@@ -22,6 +22,10 @@ import {
 import { normalizeHexColor } from "./lib/color.js";
 import { conflictKey } from "./lib/conflict-key.js";
 
+/**
+ * The local peer's mutable identity fields (the subset `updateSelf` may
+ * patch): display name and presence color.
+ */
 export interface CollabSelf {
 	readonly displayName: string;
 	readonly color: string;
@@ -36,6 +40,11 @@ export interface CollabSelf {
  */
 const MAX_CONFLICTS = 50;
 
+/**
+ * The full collab UI state bag returned by the composite
+ * {@link useCollabContext} hook — adapter, identity, status, peers, the
+ * conflict queue + its mutators, and the remote-cursor visibility toggle.
+ */
 export interface CollabUIContextValue {
 	readonly adapter: YjsSnapshotAdapter;
 	readonly self: PeerInfo;
@@ -102,6 +111,11 @@ interface CursorVisibilityContextValue {
 const CursorVisibilityContext =
 	createContext<CursorVisibilityContextValue | null>(null);
 
+/**
+ * Props for {@link CollabUIProvider}: the live yjs adapter, the host's
+ * authoritative local `self` identity, and optional seeds/callbacks for
+ * remote-cursor visibility.
+ */
 export interface CollabUIProviderProps {
 	readonly adapter: YjsSnapshotAdapter;
 	/**
@@ -114,6 +128,26 @@ export interface CollabUIProviderProps {
 	 */
 	readonly self: PeerInfo;
 	readonly children: ReactNode;
+	/**
+	 * Seed the initial remote-cursor visibility (review §4.2.1). The
+	 * provider keeps the toggle in React state; this only sets its first
+	 * value so a host can restore a persisted preference (localStorage,
+	 * a settings store, …) on mount. Defaults to `true`. Read at mount
+	 * only — later changes flow through `setShowRemoteCursors`.
+	 *
+	 * Kept host-driven (no localStorage baked into this package) so the
+	 * provider stays SSR-safe and storage-agnostic.
+	 */
+	readonly initialShowRemoteCursors?: boolean;
+	/**
+	 * Fired whenever remote-cursor visibility changes — whether through
+	 * the bundled `<CollabSettingsPopover>` toggle or a programmatic
+	 * `setShowRemoteCursors(...)` on the context. Lets a host persist the
+	 * preference (review §4.2.1). Does **not** fire on initial mount (the
+	 * host already knows the seed it passed), and same-value writes are
+	 * suppressed.
+	 */
+	readonly onShowRemoteCursorsChange?: (next: boolean) => void;
 }
 
 /**
@@ -145,7 +179,13 @@ function useExternalStatus(adapter: YjsSnapshotAdapter): ConnectionStatus {
 }
 
 export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
-	const { adapter, children, self: selfProp } = props;
+	const {
+		adapter,
+		children,
+		self: selfProp,
+		initialShowRemoteCursors,
+		onShowRemoteCursorsChange,
+	} = props;
 	// `self` is the host's `selfProp` plus any local override applied via
 	// `updateSelf` (the settings popover). The override is tagged with the
 	// `selfProp` signature it was taken under, so a host identity change makes
@@ -158,7 +198,12 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	} | null>(null);
 	const [peers, setPeers] = useState<readonly PresenceState[]>([]);
 	const [conflicts, setConflicts] = useState<readonly ConflictEvent[]>([]);
-	const [showRemoteCursors, setShowRemoteCursors] = useState(true);
+	// Seed from the host (review §4.2.1). The `?? true` keeps the default
+	// visible when the prop is absent — read at mount only, so later host
+	// changes flow through `setShowRemoteCursors`, never re-seed.
+	const [showRemoteCursors, setShowRemoteCursors] = useState(
+		initialShowRemoteCursors ?? true,
+	);
 
 	// Collision-proof tuple key (mirrors `conflictKey` /
 	// `peerIdentitySignature`): a separator char in a host id/displayName
@@ -290,9 +335,30 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		[conflicts, dismissConflict, clearConflicts],
 	);
 
+	// Keep the latest host callback and current visibility in refs so the
+	// notifying setter stays referentially stable (empty deps) — the value
+	// memo below only churns on the actual boolean, not on callback identity.
+	const onShowRemoteCursorsChangeRef = useRef(onShowRemoteCursorsChange);
+	onShowRemoteCursorsChangeRef.current = onShowRemoteCursorsChange;
+	const showRemoteCursorsRef = useRef(showRemoteCursors);
+	showRemoteCursorsRef.current = showRemoteCursors;
+
+	const setShowRemoteCursorsAndNotify = useCallback((next: boolean) => {
+		// Suppress same-value writes so the host callback fires only on a real
+		// change. Notify OUTSIDE the state updater (not inside it) so React's
+		// StrictMode double-invoke of the reducer can't double-fire the host.
+		if (showRemoteCursorsRef.current === next) return;
+		showRemoteCursorsRef.current = next;
+		setShowRemoteCursors(next);
+		onShowRemoteCursorsChangeRef.current?.(next);
+	}, []);
+
 	const cursorVisibilityValue = useMemo<CursorVisibilityContextValue>(
-		() => ({ showRemoteCursors, setShowRemoteCursors }),
-		[showRemoteCursors],
+		() => ({
+			showRemoteCursors,
+			setShowRemoteCursors: setShowRemoteCursorsAndNotify,
+		}),
+		[showRemoteCursors, setShowRemoteCursorsAndNotify],
 	);
 
 	return (
@@ -321,14 +387,24 @@ function useRequired<T>(ctx: T | null, hook: string): T {
 	return ctx;
 }
 
+/** The live {@link YjsSnapshotAdapter} the provider was mounted with. */
 export function useCollabAdapter(): YjsSnapshotAdapter {
 	return useRequired(use(AdapterContext), "useCollabAdapter");
 }
 
+/**
+ * Current adapter {@link ConnectionStatus}. Reads only `StatusContext`, so
+ * consumers don't re-render on peer / cursor / conflict churn.
+ */
 export function useCollabStatus(): ConnectionStatus {
 	return useRequired(use(StatusContext), "useCollabStatus");
 }
 
+/**
+ * The remote peers' full presence frames (identity + cursor + selection),
+ * excluding the local peer. Re-renders on cursor/selection churn — prefer
+ * {@link useCollabPeerIdentities} for identity-only consumers.
+ */
 export function useCollabPeers(): readonly PresenceState[] {
 	return useRequired(use(PeersContext), "useCollabPeers");
 }
@@ -344,6 +420,7 @@ export function useCollabPeerIdentities(): readonly PeerInfo[] {
 	return useRequired(use(PeerIdentitiesContext), "useCollabPeerIdentities");
 }
 
+/** The local peer's current identity (`self`). Reads only `IdentityContext`. */
 export function useCollabSelf(): PeerInfo {
 	return useRequired(use(IdentityContext), "useCollabSelf").self;
 }
@@ -356,6 +433,11 @@ export function useCollabIdentity(): IdentityContextValue {
 	return useRequired(use(IdentityContext), "useCollabIdentity");
 }
 
+/**
+ * The retained window of recent {@link ConflictEvent}s. Reads only
+ * `ConflictsContext`; use {@link useCollabConflictQueue} when you also need
+ * the dismiss / clear mutators.
+ */
 export function useCollabConflicts(): readonly ConflictEvent[] {
 	return useRequired(use(ConflictsContext), "useCollabConflicts").conflicts;
 }
@@ -407,6 +489,105 @@ export function useCollabMetrics(pollMs = 5000): MetricsSnapshot | null {
 		return () => clearInterval(id);
 	}, [adapter, pollMs]);
 	return metrics;
+}
+
+/**
+ * Local undo/redo state snapshot (§4.1.2). Returned by
+ * {@link useCollabUndoState}. `undo`/`redo` are stable callbacks bound
+ * to the active adapter; `canUndo`/`canRedo` drive toolbar
+ * enabled-state.
+ */
+export interface CollabUndoState {
+	readonly canUndo: boolean;
+	readonly canRedo: boolean;
+	readonly undo: () => void;
+	readonly redo: () => void;
+}
+
+const noop = (): void => undefined;
+
+/**
+ * Frozen disabled snapshot returned when the active adapter predates the
+ * undo controller (`onUndoStackChange`/`canUndo` absent). A stable module
+ * reference keeps `useSyncExternalStore` from looping on this path.
+ */
+const DISABLED_UNDO_STATE: CollabUndoState = {
+	canUndo: false,
+	canRedo: false,
+	undo: noop,
+	redo: noop,
+};
+
+/**
+ * Subscribe to the adapter's local undo/redo stack (§4.1.2). Mirrors the
+ * `UndoController` surface exposed by {@link YjsSnapshotAdapter}: it backs
+ * `canUndo`/`canRedo` with `useSyncExternalStore` over
+ * `adapter.onUndoStackChange`, so a toolbar re-reads enabled-state the
+ * instant a tracked edit (or an `undo()`/`redo()`) mutates the stack —
+ * without a stale-paint window.
+ *
+ * Undo is opt-in on the adapter; when it was not enabled (or the adapter
+ * predates the controller entirely) every member is absent at runtime, so
+ * the hook returns a frozen disabled snapshot
+ * (`{ canUndo:false, canRedo:false, undo:noop, redo:noop }`) and never
+ * throws. The `undo`/`redo` callbacks are likewise guarded so calling them
+ * on an undo-less adapter is a no-op.
+ */
+export function useCollabUndoState(): CollabUndoState {
+	const adapter = useCollabAdapter();
+
+	// Guarded, adapter-stable callbacks. The typeof check keeps the hook
+	// safe against adapters that lack the controller at runtime (the type
+	// declares the members, but an in-memory / legacy adapter may omit
+	// them), so `undo()`/`redo()` degrade to no-ops instead of throwing.
+	const undo = useCallback(() => {
+		if (typeof adapter.undo === "function") adapter.undo();
+	}, [adapter]);
+	const redo = useCallback(() => {
+		if (typeof adapter.redo === "function") adapter.redo();
+	}, [adapter]);
+
+	// Cache the last snapshot so `getSnapshot` returns a referentially
+	// stable value when `canUndo`/`canRedo` are unchanged (the
+	// `useSyncExternalStore` stability invariant).
+	const cacheRef = useRef<CollabUndoState | undefined>(undefined);
+
+	const subscribe = useCallback(
+		(onStoreChange: () => void) => {
+			if (typeof adapter.onUndoStackChange !== "function") {
+				return noop;
+			}
+			return adapter.onUndoStackChange(onStoreChange);
+		},
+		[adapter],
+	);
+
+	const getSnapshot = useCallback((): CollabUndoState => {
+		if (
+			typeof adapter.onUndoStackChange !== "function" ||
+			typeof adapter.canUndo !== "function" ||
+			typeof adapter.canRedo !== "function"
+		) {
+			return DISABLED_UNDO_STATE;
+		}
+		const canUndo = adapter.canUndo();
+		const canRedo = adapter.canRedo();
+		const prev = cacheRef.current;
+		if (
+			prev !== undefined &&
+			prev.canUndo === canUndo &&
+			prev.canRedo === canRedo &&
+			prev.undo === undo &&
+			prev.redo === redo
+		) {
+			return prev;
+		}
+		const next: CollabUndoState = { canUndo, canRedo, undo, redo };
+		cacheRef.current = next;
+		return next;
+	}, [adapter, undo, redo]);
+
+	return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /**
