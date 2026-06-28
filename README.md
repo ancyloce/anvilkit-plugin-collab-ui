@@ -1,6 +1,6 @@
 # @anvilkit/collab-ui
 
-> **Release candidate (`0.1.0-rc.9`).** Tracks `@anvilkit/plugin-collab-yjs` on the `@next` npm tag. Both packages cut a joint GA once the SnapshotAdapter v2 contract is frozen.
+> **Release candidate (`0.1.0-rc.10`).** Tracks `@anvilkit/plugin-collab-yjs` on the `@next` npm tag. Both packages cut a joint GA once the SnapshotAdapter v2 contract is frozen.
 
 Host UI primitives for [`@anvilkit/plugin-collab-yjs`](../plugin-collab-yjs/README.md). The Yjs plugin is headless — it ships the CRDT layer, the SnapshotAdapter, presence wiring, and conflict diagnostics, but no DOM. This package fills in the UI: a context provider that surfaces live collab state plus a set of shadcn-style components host apps drop into their editor chrome. The consolidated `createCollabPlugin()` factory bundles both packages into a single `StudioPlugin` for the common case.
 
