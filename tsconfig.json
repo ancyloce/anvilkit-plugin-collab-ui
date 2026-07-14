@@ -1,13 +1,12 @@
 {
 	"extends": "@anvilkit/typescript-config/react-library-bundler.json",
 	"compilerOptions": {
-		"baseUrl": ".",
 		"ignoreDeprecations": "6.0",
 		"outDir": "dist",
 		"rootDir": "src",
 		"paths": {
-			"@anvilkit/collab-ui": ["src"],
-			"@anvilkit/collab-ui/*": ["src/*"]
+			"@anvilkit/collab-ui": ["./src"],
+			"@anvilkit/collab-ui/*": ["./src/*"]
 		}
 	},
 	"include": ["src/**/*.ts", "src/**/*.tsx"],
