@@ -53,9 +53,12 @@ export function CollabPresenceAnnouncer(
 	// Keep the latest `msg` in a ref so the diff effect depends ONLY on the
 	// roster reference (mirrors `ConflictNoticeCenter`). A locale switch then
 	// updates copy on the next real roster delta without re-running the diff
-	// against an unchanged roster.
+	// against an unchanged roster. Synced in an effect (not during render):
+	// render must stay pure, since React can replay or discard it.
 	const msgRef = useRef(msg);
-	msgRef.current = msg;
+	useEffect(() => {
+		msgRef.current = msg;
+	}, [msg]);
 
 	// Previous roster snapshot (id → identity). `null` until the first effect
 	// run so the INITIAL roster seeds silently — only post-mount deltas are

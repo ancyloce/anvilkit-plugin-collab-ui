@@ -9,7 +9,7 @@
 
 import type { MetricsSnapshot } from "@anvilkit/plugin-collab-yjs";
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ConflictNoticeCenter } from "../components/conflict-notice-center.js";
 import { PresenceLayer } from "../components/presence-layer.js";
@@ -174,8 +174,10 @@ describe("P2-2 · split context isolates re-renders (review §C2)", () => {
 		function StatusProbe(): null {
 			useCollabStatus();
 			const r = useRef(0);
-			r.current += 1;
-			renders.count = r.current;
+			useEffect(() => {
+				r.current += 1;
+				renders.count = r.current;
+			});
 			return null;
 		}
 		const { adapter, controls } = createFakeAdapter();

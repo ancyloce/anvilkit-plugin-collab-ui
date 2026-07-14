@@ -235,9 +235,11 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	]);
 
 	const selfRef = useRef(self);
-	selfRef.current = self;
 	const selfPropSigRef = useRef(selfPropSig);
-	selfPropSigRef.current = selfPropSig;
+	useEffect(() => {
+		selfRef.current = self;
+		selfPropSigRef.current = selfPropSig;
+	});
 
 	const status = useExternalStatus(adapter);
 
@@ -339,9 +341,11 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 	// notifying setter stays referentially stable (empty deps) — the value
 	// memo below only churns on the actual boolean, not on callback identity.
 	const onShowRemoteCursorsChangeRef = useRef(onShowRemoteCursorsChange);
-	onShowRemoteCursorsChangeRef.current = onShowRemoteCursorsChange;
 	const showRemoteCursorsRef = useRef(showRemoteCursors);
-	showRemoteCursorsRef.current = showRemoteCursors;
+	useEffect(() => {
+		onShowRemoteCursorsChangeRef.current = onShowRemoteCursorsChange;
+		showRemoteCursorsRef.current = showRemoteCursors;
+	});
 
 	const setShowRemoteCursorsAndNotify = useCallback((next: boolean) => {
 		// Suppress same-value writes so the host callback fires only on a real

@@ -46,7 +46,9 @@ export function CollabPresencePublisher(
 	const enabled = props.enabled ?? true;
 
 	const selectionRef = useRef(selection);
-	selectionRef.current = selection;
+	useEffect(() => {
+		selectionRef.current = selection;
+	}, [selection]);
 
 	useEffect(() => {
 		if (!enabled) return;

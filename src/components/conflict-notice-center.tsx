@@ -65,9 +65,11 @@ export function ConflictNoticeCenter(
 	// rides along in the same ref so the toast action label stays current
 	// across a locale switch without re-running the effect.
 	const formatterRef = useRef(formatter);
-	formatterRef.current = formatter;
 	const msgRef = useRef(msg);
-	msgRef.current = msg;
+	useEffect(() => {
+		formatterRef.current = formatter;
+		msgRef.current = msg;
+	});
 	// Lazy init: a nullable ref so the `Set` is allocated once on first
 	// effect run, not rebuilt as a throwaway on every render.
 	const seenRef = useRef<Set<string> | null>(null);
