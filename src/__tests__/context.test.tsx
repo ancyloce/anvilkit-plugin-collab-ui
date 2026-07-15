@@ -8,6 +8,7 @@ import {
 	useCollabConflicts,
 	useCollabContext,
 	useCollabMetrics,
+	useCollabPeerIdentities,
 	useCollabPeers,
 	useCollabStatus,
 } from "../context.js";
@@ -186,6 +187,43 @@ describe("CollabUIProvider", () => {
 			]),
 		);
 		expect(result.current).not.toBe(firstRef);
+	});
+
+	it("F5: keeps peer identities stable across cursor-only frames", () => {
+		const { adapter, controls } = createFakeAdapter();
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+				{children}
+			</CollabUIProvider>
+		);
+		const { result } = renderHook(() => useCollabPeerIdentities(), {
+			wrapper,
+		});
+
+		act(() =>
+			controls.emitPeers([
+				{ peer: { id: "bob", displayName: "Bob" }, cursor: { x: 1, y: 2 } },
+			]),
+		);
+		const firstRef = result.current;
+
+		act(() =>
+			controls.emitPeers([
+				{ peer: { id: "bob", displayName: "Bob" }, cursor: { x: 9, y: 9 } },
+			]),
+		);
+		expect(result.current).toBe(firstRef);
+
+		act(() =>
+			controls.emitPeers([
+				{
+					peer: { id: "bob", displayName: "Robert" },
+					cursor: { x: 9, y: 9 },
+				},
+			]),
+		);
+		expect(result.current).not.toBe(firstRef);
+		expect(result.current[0]?.displayName).toBe("Robert");
 	});
 
 	it("F8: caps the retained conflict window to the most recent 50", () => {

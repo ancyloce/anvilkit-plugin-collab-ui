@@ -16,7 +16,7 @@
  *      - `providers` — one provider that wraps the Studio tree in
  *        `<CollabUIProvider>` (so `useCollabContext`/`useCollabPeers`/
  *        ... work everywhere the host renders) plus an internal
- *        `<IdentitySync>` side-effect component for `onIdentityChange`
+ *        identity change notifications from the provider
  *        and, unless `presence.broadcastCursor` is `false`, a single
  *        turnkey presence writer so the local cursor is published without
  *        any host pointer wiring. The writer is the Puck-free
@@ -90,9 +90,8 @@ import type { ConflictNoticeCenterProps } from "./components/conflict-notice-cen
 import { PeerAvatarStack } from "./components/peer-avatar-stack.js";
 import type { CollabPresenceLayerProps } from "./components/presence-layer.js";
 import { createConflictOverlay } from "./conflict-overlay.js";
-import { CollabUIProvider } from "./context.js";
+import { InternalCollabUIProvider } from "./context.js";
 import { COLLAB_UI_ENTRY } from "./i18n/entry.js";
-import { IdentitySync } from "./identity-sync.js";
 import { makeAnonSelf } from "./lib/anon-identity.js";
 import {
 	type PresencePublishingMode,
@@ -607,19 +606,19 @@ export function createCollabPlugin(
 			}: {
 				readonly children: ReactNode;
 			}): ReactNode => (
-				<CollabUIProvider
+				<InternalCollabUIProvider
 					adapter={adapter}
 					self={self}
+					onIdentityChange={onIdentityChange}
 					initialShowRemoteCursors={initialShowRemoteCursors}
 					onShowRemoteCursorsChange={onShowRemoteCursorsChange}
 				>
-					<IdentitySync onIdentityChange={onIdentityChange} />
 					{PresenceWriter ? <PresenceWriter /> : null}
 					{/* Single global mount → a11y join/leave announced once, with
 					    no double-announce risk. */}
 					<CollabPresenceAnnouncer />
 					{children}
-				</CollabUIProvider>
+				</InternalCollabUIProvider>
 			);
 
 			const registration: StudioPluginRegistration = {

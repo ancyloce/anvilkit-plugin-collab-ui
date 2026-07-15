@@ -150,6 +150,10 @@ export interface CollabUIProviderProps {
 	readonly onShowRemoteCursorsChange?: (next: boolean) => void;
 }
 
+type InternalCollabUIProviderProps = CollabUIProviderProps & {
+	readonly onIdentityChange?: (next: PeerInfo) => void;
+};
+
 /**
  * Subscribe to adapter connection status via `useSyncExternalStore`
  * (review §A2). Backing the status with the external store instead of
@@ -178,11 +182,12 @@ function useExternalStatus(adapter: YjsSnapshotAdapter): ConnectionStatus {
 	return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
+function CollabUIProviderRoot(props: InternalCollabUIProviderProps): ReactNode {
 	const {
 		adapter,
 		children,
 		self: selfProp,
+		onIdentityChange,
 		initialShowRemoteCursors,
 		onShowRemoteCursorsChange,
 	} = props;
@@ -197,6 +202,7 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		readonly color?: string;
 	} | null>(null);
 	const [peers, setPeers] = useState<readonly PresenceState[]>([]);
+	const [peerIdentities, setPeerIdentities] = useState<readonly PeerInfo[]>([]);
 	const [conflicts, setConflicts] = useState<readonly ConflictEvent[]>([]);
 	// Seed from the host (review §4.2.1). The `?? true` keeps the default
 	// visible when the prop is absent — read at mount only, so later host
@@ -205,8 +211,7 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		initialShowRemoteCursors ?? true,
 	);
 
-	// Collision-proof tuple key (mirrors `conflictKey` /
-	// `peerIdentitySignature`): a separator char in a host id/displayName
+	// Collision-proof tuple key: a separator char in a host id/displayName
 	// must not alias two distinct identities into the same signature.
 	const selfPropSig = JSON.stringify([
 		selfProp.id,
@@ -243,20 +248,6 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 
 	const status = useExternalStatus(adapter);
 
-	// F5 — derive a roster-only identity list whose reference only
-	// changes when the id/displayName/color *set* changes, so avatar /
-	// identity consumers don't re-render on cursor-only frames. (Computing
-	// derived state into a ref during render is a standard cache pattern —
-	// no external side effect.)
-	const identitySigRef = useRef<string | undefined>(undefined);
-	const identitiesRef = useRef<readonly PeerInfo[]>([]);
-	const identitySig = peerIdentitySignature(peers);
-	if (identitySigRef.current !== identitySig) {
-		identitySigRef.current = identitySig;
-		identitiesRef.current = peers.map((frame) => frame.peer);
-	}
-	const peerIdentities = identitiesRef.current;
-
 	useEffect(() => {
 		const unsub = adapter.onConflict((event) => {
 			// F8 — retain only the most-recent window so a host reading
@@ -276,15 +267,22 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		const presence = adapter.presence;
 		if (!presence) return;
 		const unsub = presence.onPeerChange((next) => {
+			const deduped = dedupeRemotePeers(next, selfRef.current.id);
 			// F2 — keep `PeersContext` identity stable on no-op frames.
 			// `dedupeRemotePeers` always allocates a fresh array, so
 			// without this bail every coalesced inbound frame (H1) would
 			// change the context value and re-render every
 			// `useCollabPeers()` consumer even when no peer datum changed.
-			setPeers((prev) => {
-				const deduped = dedupeRemotePeers(next, selfRef.current.id);
-				return peersShallowEqual(prev, deduped) ? prev : deduped;
-			});
+			setPeers((prev) => (peersShallowEqual(prev, deduped) ? prev : deduped));
+			// F5 — update the roster-only slice in the adapter event instead
+			// of mutating a render-time ref. Preserve its reference when only
+			// cursor or selection data changed so identity-only consumers skip
+			// those high-frequency renders.
+			setPeerIdentities((prev) =>
+				peerIdentitiesEqual(prev, deduped)
+					? prev
+					: deduped.map((frame) => frame.peer),
+			);
 		});
 		return () => unsub();
 	}, [adapter]);
@@ -308,24 +306,36 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 		setConflicts([]);
 	}, []);
 
-	const updateSelf = useCallback((patch: Partial<CollabSelf>) => {
-		// Snapshot the current effective identity, apply the patch, and tag it
-		// with the live `selfProp` signature so a later host identity change
-		// evicts this override (see the `self` derivation above).
-		const current = selfRef.current;
-		setSelfOverride({
-			sig: selfPropSigRef.current,
-			displayName: patch.displayName ?? current.displayName,
-			// Guard the local edit path so an invalid value from the settings
-			// popover never reaches `adapter.presence.update` (review §B4/U4).
-			// Remote peer colors are already sanitized upstream by
-			// `validatePeerInfo` / `validatePresenceState` in the yjs adapter.
-			color:
-				patch.color !== undefined
-					? normalizeHexColor(patch.color, current.color)
-					: current.color,
-		});
-	}, []);
+	const updateSelf = useCallback(
+		(patch: Partial<CollabSelf>) => {
+			// Snapshot the current effective identity and apply the patch in the
+			// initiating action. Notifying the host here avoids a second render
+			// cycle through an effect-based identity mirror.
+			const current = selfRef.current;
+			const next: PeerInfo = {
+				id: current.id,
+				displayName: patch.displayName ?? current.displayName,
+				// Guard the local edit path so an invalid value from the settings
+				// popover never reaches `adapter.presence.update` (review §B4/U4).
+				// Remote peer colors are already sanitized upstream by
+				// `validatePeerInfo` / `validatePresenceState` in the yjs adapter.
+				color:
+					patch.color !== undefined
+						? normalizeHexColor(patch.color, current.color)
+						: current.color,
+			};
+			if (peerInfoEquals(current, next)) return;
+			// Tag the override with the live `selfProp` signature so a later
+			// host identity change evicts it (see the `self` derivation above).
+			setSelfOverride({
+				sig: selfPropSigRef.current,
+				displayName: next.displayName,
+				color: next.color,
+			});
+			onIdentityChange?.(next);
+		},
+		[onIdentityChange],
+	);
 
 	const identityValue = useMemo<IdentityContextValue>(
 		() => ({ self, updateSelf }),
@@ -382,6 +392,17 @@ export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
 			</IdentityContext>
 		</AdapterContext>
 	);
+}
+
+export function CollabUIProvider(props: CollabUIProviderProps): ReactNode {
+	return <CollabUIProviderRoot {...props} />;
+}
+
+/** Internal plugin bridge that reports identity edits in their initiating action. */
+export function InternalCollabUIProvider(
+	props: InternalCollabUIProviderProps,
+): ReactNode {
+	return <CollabUIProviderRoot {...props} />;
 }
 
 function useRequired<T>(ctx: T | null, hook: string): T {
@@ -716,23 +737,32 @@ function peersShallowEqual(
 	return true;
 }
 
-/**
- * F5 — a stable signature over the roster's id/displayName/color so the
- * provider can reuse the previous identities array reference across
- * cursor-only frames.
- */
-function peerIdentitySignature(peers: readonly PresenceState[]): string {
-	// JSON-encode so a user-controlled `displayName` containing the field
-	// separator can't alias two distinct rosters into one signature.
-	const parts: [string, string | null, string | null][] = [];
-	for (const frame of peers) {
-		parts.push([
-			frame.peer.id,
-			frame.peer.displayName ?? null,
-			frame.peer.color ?? null,
-		]);
+/** F5 — value equality for the roster-only identity context. */
+function peerIdentitiesEqual(
+	a: readonly PeerInfo[],
+	b: readonly PresenceState[],
+): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		const x = a[i];
+		const y = b[i]?.peer;
+		if (
+			x === undefined ||
+			y === undefined ||
+			x.id !== y.id ||
+			x.displayName !== y.displayName ||
+			x.color !== y.color
+		) {
+			return false;
+		}
 	}
-	return JSON.stringify(parts);
+	return true;
+}
+
+function peerInfoEquals(a: PeerInfo, b: PeerInfo): boolean {
+	return (
+		a.id === b.id && a.displayName === b.displayName && a.color === b.color
+	);
 }
 
 /**
