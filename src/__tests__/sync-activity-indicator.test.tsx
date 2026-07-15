@@ -1,5 +1,6 @@
 import { act, render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { renderToString } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 import { SyncActivityIndicator } from "../components/sync-activity-indicator.js";
 import { CollabUIProvider } from "../context.js";
 import { CollabUII18nProvider } from "../i18n/provider.js";
@@ -67,5 +68,32 @@ describe("<SyncActivityIndicator />", () => {
 		expect(getByTestId("sync-activity-indicator-label").textContent).toBe(
 			"Sync error",
 		);
+	});
+
+	it("defers locale-dependent time formatting until after server render", () => {
+		const { adapter } = createFakeAdapter();
+		const toLocaleTimeString = vi
+			.spyOn(Date.prototype, "toLocaleTimeString")
+			.mockReturnValue("LOCAL TIME");
+
+		renderToString(
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<SyncActivityIndicator lastSyncAt="2026-07-15T12:00:00.000Z" />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
+		);
+
+		expect(toLocaleTimeString).not.toHaveBeenCalled();
+
+		render(
+			<CollabUII18nProvider>
+				<CollabUIProvider adapter={adapter} self={{ id: "alice" }}>
+					<SyncActivityIndicator lastSyncAt="2026-07-15T12:00:00.000Z" />
+				</CollabUIProvider>
+			</CollabUII18nProvider>,
+		);
+		expect(toLocaleTimeString).toHaveBeenCalled();
+		toLocaleTimeString.mockRestore();
 	});
 });

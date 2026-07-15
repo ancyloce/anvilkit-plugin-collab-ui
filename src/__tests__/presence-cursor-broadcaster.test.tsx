@@ -132,6 +132,12 @@ describe("PresenceCursorBroadcaster", () => {
 	});
 
 	it("stops publishing after unmount", () => {
+		const iframe = document.createElement("iframe");
+		iframe.id = "preview-frame";
+		document.body.appendChild(iframe);
+		const frameDoc = iframe.contentDocument;
+		expect(frameDoc).not.toBeNull();
+
 		const { adapter, update } = makeSpyAdapter();
 		const { unmount } = renderBroadcaster(adapter);
 		update.mockClear();
@@ -139,6 +145,9 @@ describe("PresenceCursorBroadcaster", () => {
 
 		act(() => {
 			window.dispatchEvent(
+				new MouseEvent("mousemove", { clientX: 5, clientY: 5 }),
+			);
+			frameDoc?.dispatchEvent(
 				new MouseEvent("mousemove", { clientX: 5, clientY: 5 }),
 			);
 		});

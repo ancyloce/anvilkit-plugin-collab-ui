@@ -8,7 +8,7 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "@anvilkit/ui/components/animate-ui/components/base/popover";
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { useCollabMetrics, useCollabStatus } from "../context.js";
 import { cn } from "../lib/cn.js";
 
@@ -26,6 +26,11 @@ const DOT_CLASS: Record<ConnectionStatus["kind"], string> = {
 	reconnecting: "bg-muted-foreground animate-pulse",
 	error: "bg-destructive",
 };
+
+interface FormattedTime {
+	readonly source: string;
+	readonly value: string;
+}
 
 function statusLabel(status: ConnectionStatus, msg: Msg): string {
 	switch (status.kind) {
@@ -126,6 +131,26 @@ export function SyncActivityIndicator(
 	const status = useCollabStatus();
 	const metrics = useCollabMetrics();
 	const popoverId = useId();
+	const syncedSince = status.kind === "synced" ? status.since : undefined;
+	const [formattedTimes, setFormattedTimes] = useState<{
+		readonly lastSyncAt?: FormattedTime;
+		readonly syncedSince?: FormattedTime;
+	}>({});
+	useEffect(() => {
+		setFormattedTimes({
+			lastSyncAt:
+				props.lastSyncAt === undefined
+					? undefined
+					: {
+							source: props.lastSyncAt,
+							value: formatTime(props.lastSyncAt),
+						},
+			syncedSince:
+				syncedSince === undefined
+					? undefined
+					: { source: syncedSince, value: formatTime(syncedSince) },
+		});
+	}, [props.lastSyncAt, syncedSince]);
 	// Manual props win as host overrides; otherwise fall back to live
 	// adapter metrics (review §C5 / §4.5).
 	const latencyMs = props.latencyMs ?? metrics?.syncLatencyP95Ms ?? undefined;
@@ -199,7 +224,11 @@ export function SyncActivityIndicator(
 					{status.kind === "synced" ? (
 						<>
 							<dt>{labels.syncedSince}</dt>
-							<dd>{formatTime(status.since)}</dd>
+							<dd>
+								{formattedTimes.syncedSince?.source === status.since
+									? formattedTimes.syncedSince.value
+									: status.since}
+							</dd>
 						</>
 					) : null}
 					{status.kind === "reconnecting" ? (
@@ -217,7 +246,11 @@ export function SyncActivityIndicator(
 					{props.lastSyncAt !== undefined ? (
 						<>
 							<dt>{labels.lastSync}</dt>
-							<dd>{formatTime(props.lastSyncAt)}</dd>
+							<dd>
+								{formattedTimes.lastSyncAt?.source === props.lastSyncAt
+									? formattedTimes.lastSyncAt.value
+									: props.lastSyncAt}
+							</dd>
 						</>
 					) : null}
 					{props.lastPeerName !== undefined ? (

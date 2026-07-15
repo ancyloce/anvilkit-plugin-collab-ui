@@ -8,6 +8,64 @@ import { useCollabAdapter, useCollabSelf } from "../context.js";
 /** Puck renders the editable canvas inside this iframe. */
 const PUCK_PREVIEW_FRAME_SELECTOR = "iframe#preview-frame";
 
+function listenToPuckPreviewFrame(
+	schedule: (cursor: PresenceCursor) => void,
+): () => void {
+	let frameEl: HTMLIFrameElement | null = null;
+	let frameDoc: Document | null = null;
+	const frameHandler = (event: MouseEvent): void => {
+		if (!frameEl) return;
+		const rect = frameEl.getBoundingClientRect();
+		schedule({ x: rect.left + event.clientX, y: rect.top + event.clientY });
+	};
+
+	function detachFrameDocument(): void {
+		frameDoc?.removeEventListener("mousemove", frameHandler);
+		frameDoc = null;
+	}
+	function detachFrame(): void {
+		detachFrameDocument();
+		frameEl?.removeEventListener("load", attachFrame);
+		frameEl = null;
+	}
+	// (Re)bind to the preview iframe and its document. The iframe may mount
+	// after this subscription starts (Puck renders it lazily) and swaps
+	// documents on navigation, so we re-run on `load`, focus, and DOM mutations.
+	function attachFrame(): void {
+		const nextFrame = document.querySelector<HTMLIFrameElement>(
+			PUCK_PREVIEW_FRAME_SELECTOR,
+		);
+		if (nextFrame !== frameEl) {
+			detachFrame();
+			frameEl = nextFrame;
+			frameEl?.addEventListener("load", attachFrame);
+		}
+		let nextDoc: Document | null = null;
+		try {
+			nextDoc = nextFrame?.contentDocument ?? null;
+		} catch {
+			nextDoc = null; // cross-origin — unreachable for Puck's same-origin frame
+		}
+		if (nextDoc === frameDoc) return;
+		detachFrameDocument();
+		frameDoc = nextDoc;
+		frameDoc?.addEventListener("mousemove", frameHandler, { passive: true });
+	}
+
+	const observer = new MutationObserver(attachFrame);
+	if (document.body) {
+		observer.observe(document.body, { childList: true, subtree: true });
+	}
+	attachFrame();
+	window.addEventListener("focus", attachFrame);
+
+	return () => {
+		window.removeEventListener("focus", attachFrame);
+		observer.disconnect();
+		detachFrame();
+	};
+}
+
 /**
  * Turnkey local-cursor broadcaster for the consolidated
  * `createCollabPlugin()` factory.
@@ -71,62 +129,13 @@ export function PresenceCursorBroadcaster(): ReactNode {
 			schedule({ x: event.clientX, y: event.clientY });
 		};
 
-		// Canvas-iframe moves report iframe-content coordinates; add the
-		// iframe's viewport offset so both channels share one coordinate space.
-		let frameEl: HTMLIFrameElement | null = null;
-		let frameDoc: Document | null = null;
-		const frameHandler = (event: MouseEvent): void => {
-			if (!frameEl) return;
-			const rect = frameEl.getBoundingClientRect();
-			schedule({ x: rect.left + event.clientX, y: rect.top + event.clientY });
-		};
-
-		function detachFrameDocument(): void {
-			frameDoc?.removeEventListener("mousemove", frameHandler);
-			frameDoc = null;
-		}
-		function detachFrame(): void {
-			detachFrameDocument();
-			frameEl?.removeEventListener("load", attachFrame);
-			frameEl = null;
-		}
-		// (Re)bind to the preview iframe and its document. The iframe mounts
-		// after this effect (Puck renders it lazily) and swaps its document on
-		// navigation, so we re-run on `load`, on focus, and on DOM mutations.
-		function attachFrame(): void {
-			const nextFrame = document.querySelector<HTMLIFrameElement>(
-				PUCK_PREVIEW_FRAME_SELECTOR,
-			);
-			if (nextFrame !== frameEl) {
-				detachFrame();
-				frameEl = nextFrame;
-				frameEl?.addEventListener("load", attachFrame);
-			}
-			let nextDoc: Document | null = null;
-			try {
-				nextDoc = nextFrame?.contentDocument ?? null;
-			} catch {
-				nextDoc = null; // cross-origin — unreachable for Puck's same-origin frame
-			}
-			if (nextDoc === frameDoc) return;
-			detachFrameDocument();
-			frameDoc = nextDoc;
-			frameDoc?.addEventListener("mousemove", frameHandler, { passive: true });
-		}
-
-		const observer = new MutationObserver(attachFrame);
-		if (document.body) {
-			observer.observe(document.body, { childList: true, subtree: true });
-		}
-		attachFrame();
-
+		// Canvas-iframe moves are translated into the parent viewport by a
+		// subscription that returns ownership of its complete teardown.
+		const stopListeningToPreviewFrame = listenToPuckPreviewFrame(schedule);
 		window.addEventListener("mousemove", windowHandler, { passive: true });
-		window.addEventListener("focus", attachFrame);
 		return () => {
 			window.removeEventListener("mousemove", windowHandler);
-			window.removeEventListener("focus", attachFrame);
-			observer.disconnect();
-			detachFrame();
+			stopListeningToPreviewFrame();
 			if (frame !== 0) cancelAnimationFrame(frame);
 		};
 	}, [adapter, self]);
