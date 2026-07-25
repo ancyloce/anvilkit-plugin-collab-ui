@@ -41,7 +41,7 @@
 		"tag": "next"
 	},
 	"peerDependencies": {
-		"@hocuspocus/provider": "^4.3.0",
+		"@hocuspocus/provider": "^4.4.0",
 		"@puckeditor/core": "^0.22.2",
 		"react": ">=19.0.0",
 		"react-dom": ">=19.0.0",
@@ -65,7 +65,7 @@
 		"@anvilkit/ui": "workspace:*",
 		"@anvilkit/utils": "workspace:*",
 		"clsx": "^2.1.1",
-		"lucide-react": "^1.24.0",
+		"lucide-react": "^1.26.0",
 		"motion": "^12.42.2",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.6.0"
@@ -88,7 +88,7 @@
 		"@anvilkit/biome-config": "workspace:*",
 		"@anvilkit/typescript-config": "workspace:*",
 		"@anvilkit/vitest-config": "workspace:*",
-		"@hocuspocus/provider": "^4.3.0",
+		"@hocuspocus/provider": "^4.4.0",
 		"@puckeditor/core": "^0.22.2",
 		"@rsbuild/plugin-react": "^2.1.0",
 		"@rslib/core": "^0.23.2",
@@ -100,9 +100,9 @@
 		"esbuild": "^0.28.1",
 		"jsdom": "^29.1.1",
 		"madge": "^8.0.0",
-		"publint": "^0.3.21",
-		"react": "^19.2.7",
-		"react-dom": "^19.2.7",
+		"publint": "^0.3.22",
+		"react": "^19.2.8",
+		"react-dom": "^19.2.8",
 		"typescript": "7.0.2",
 		"vitest": "^4.1.10",
 		"y-websocket": "^3.0.0"
