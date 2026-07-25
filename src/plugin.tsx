@@ -358,10 +358,19 @@ const PACKAGE_NAME = "@anvilkit/collab-ui";
 
 // `version` is derived from package.json so a Changesets bump can never drift
 // the runtime metadata; the metadata-drift test guards regressions.
+//
+// `capabilities.collaboration` mirrors the wrapped
+// `createCollabDataPlugin` transport's declaration (DD-0019 §7.4;
+// CORE-P1A-014): this wrapper registers under its OWN meta, so the
+// data plugin's declaration would otherwise be invisible to Studio's
+// registration-time authoring gate. Declared in TypeScript meta only.
 const META: StudioPluginMeta = {
 	...config,
 	version: packageJson.version,
 	icon: createElement(UsersRound),
+	capabilities: {
+		collaboration: { encoding: "native-tree" },
+	},
 };
 
 /** Transport primitives for `createYjsAdapter`, plus the owned transport (if
