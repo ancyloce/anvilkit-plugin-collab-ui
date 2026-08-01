@@ -65,8 +65,8 @@
 		"@anvilkit/ui": "workspace:*",
 		"@anvilkit/utils": "workspace:*",
 		"clsx": "^2.1.1",
-		"lucide-react": "^1.26.0",
-		"motion": "^12.42.2",
+		"lucide-react": "^1.28.0",
+		"motion": "^12.43.0",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.6.0"
 	},
